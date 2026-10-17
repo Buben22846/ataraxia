@@ -38,7 +38,7 @@ return function()
 
 	M._setJobId("serverA")
 	local p1 = M._claim(1001)
-	check("новый игрок: профиль по умолчанию", p1 ~= nil and p1.coins == 100 and p1.slots == FishConfig.START_SLOTS)
+	check("новый игрок: профиль по умолчанию", p1 ~= nil and p1.coins == 100 and p1.tanks.lagoon.slots == FishConfig.START_SLOTS)
 	check("новый игрок: блокировка записана", data["Player_1001"].lock.jobId == "serverA")
 
 	p1.coins = 777
@@ -81,20 +81,20 @@ return function()
 		},
 	}
 	local p7 = M._claim(1004)
-	check("миграция v1 -> v3: появились места и lastSeen", p7 ~= nil and p7.version == 3 and p7.slots == FishConfig.START_SLOTS and type(p7.lastSeen) == "number")
-	check("миграция v1 -> v2: старые данные целы", p7 ~= nil and p7.coins == 321 and #p7.fish == 1 and p7.speciesStats.guppy.pulled == 2)
+	check("миграция v1 -> v4: появились аквариум, места и lastSeen", p7 ~= nil and p7.version == 4 and p7.tanks.lagoon.slots == FishConfig.START_SLOTS and type(p7.lastSeen) == "number")
+	check("миграция v1 -> v2: старые данные целы", p7 ~= nil and p7.coins == 321 and #p7.tanks.lagoon.fish == 1 and p7.speciesStats.guppy.pulled == 2)
 
 	data["Player_1005"] = { data = { version = 1, coins = 5 } }
 	local p8 = M._claim(1005)
-	check("недостающие поля достраиваются", p8 ~= nil and type(p8.fish) == "table" and type(p8.speciesStats) == "table" and p8.nextFishId == 1)
+	check("недостающие поля достраиваются", p8 ~= nil and type(p8.tanks) == "table" and type(p8.tanks.lagoon.fish) == "table" and type(p8.speciesStats) == "table" and p8.nextFishId == 1)
 
 	local a, b = M._newProfile(), M._newProfile()
-	a.fish[1] = { id = 1 }
-	check("новые профили независимы", #b.fish == 0)
+	a.tanks.lagoon.fish[1] = { id = 1 }
+	check("новые профили независимы", #b.tanks.lagoon.fish == 0)
 
 	data["Player_1006"] = { data = { version = 2, coins = 5, slots = 6, nextFishId = 1, fish = {}, discovered = {}, speciesStats = {} } }
 	local p9 = M._claim(1006)
-	check("миграция v2 -> v3: lastSeen появился, данные целы", p9 ~= nil and p9.version == 3 and type(p9.lastSeen) == "number" and p9.slots == 6 and p9.coins == 5)
+	check("миграция v2 -> v4: lastSeen появился, данные целы", p9 ~= nil and p9.version == 4 and type(p9.lastSeen) == "number" and p9.tanks.lagoon.slots == 6 and p9.coins == 5)
 
 	-- ===== Рост, варианты, доход =====
 	check(
@@ -145,20 +145,81 @@ return function()
 
 	local Economy = require(ServerScriptService.Economy)
 	local ep = M._newProfile()
-	ep.fish = { { id = 1, species = "guppy", variant = "normal", born = os.time() - 3600, earned = 0 } }
+	ep.tanks.lagoon.fish = { { id = 1, species = "guppy", variant = "normal", born = os.time() - 3600, earned = 0 } }
 	local gained = Economy.applyIncome(ep, 10, os.time())
 	check(
 		"доход за тики: монеты, рыба, вид",
-		gained == 20 and ep.coins == 120 and ep.fish[1].earned == 20 and ep.speciesStats.guppy.earned == 20
+		gained == 20 and ep.coins == 120 and ep.tanks.lagoon.fish[1].earned == 20 and ep.speciesStats.guppy.earned == 20
 	)
 
 	local op = M._newProfile()
 	local t0 = os.time()
 	op.lastSeen = t0 - 3600
-	op.fish = { { id = 1, species = "guppy", born = t0 - 3700, earned = 0 } } -- на момент lastSeen рыбе 100 сек: малёк, доход 1
+	op.tanks.lagoon.fish = { { id = 1, species = "guppy", born = t0 - 3700, earned = 0 } } -- на момент lastSeen рыбе 100 сек: малёк, доход 1
 	check("офлайн-доход: 360 тиков × 1", Economy.applyOffline(op, t0) == 360 and op.coins == 460)
 	op.lastSeen = nil
 	check("без lastSeen офлайн-дохода нет", Economy.applyOffline(op, t0) == 0)
+
+	-- ===== Аквариумы =====
+	data["Player_1007"] = {
+		data = {
+			version = 3,
+			coins = 9,
+			slots = 7,
+			nextFishId = 3,
+			fish = { { id = 2, species = "guppy", born = 1, earned = 4 } },
+			discovered = { guppy = true },
+			speciesStats = {},
+			lastSeen = 5,
+		},
+	}
+	local p10 = M._claim(1007)
+	check(
+		"миграция v3 -> v4: рыбы и места переехали в лагуну",
+		p10 ~= nil and p10.version == 4 and p10.tanks.lagoon.slots == 7 and #p10.tanks.lagoon.fish == 1 and p10.slots == nil and p10.fish == nil
+	)
+
+	local tanksOk = true
+	for _, tankId in ipairs(FishConfig.TankOrder) do
+		local pack = FishConfig.Packs[FishConfig.Tanks[tankId].pack]
+		if pack == nil or pack.tank ~= tankId then
+			tanksOk = false
+		else
+			for _, rarity in ipairs(FishConfig.RarityOrder) do
+				if (pack.odds[rarity] or 0) > 0 and #FishConfig.speciesOfRarity(rarity, tankId) == 0 then
+					tanksOk = false
+				end
+			end
+		end
+	end
+	check("у каждого аквариума есть пак и виды всех редкостей", tanksOk)
+	check(
+		"лагуна бесплатна, остальные платные и дорожают",
+		FishConfig.Tanks.lagoon.price == 0 and FishConfig.Tanks.volcano.price > 0 and FishConfig.Tanks.arctic.price > FishConfig.Tanks.volcano.price
+	)
+	check(
+		"цена места растёт с аквариумом",
+		FishConfig.slotPrice("lagoon", 6) == 500 and FishConfig.slotPrice("volcano", 6) == 2000 and FishConfig.slotPrice("lagoon", 11) == nil
+	)
+	do
+		local roller = require(ServerScriptService.PackRoller)
+		local trng = Random.new(3)
+		local ownOnly = true
+		for _, pack in pairs(FishConfig.Packs) do
+			for _ = 1, 2000 do
+				local speciesId = roller.roll(pack, trng)
+				if FishConfig.Species[speciesId].tank ~= pack.tank then
+					ownOnly = false
+				end
+			end
+		end
+		check("из пака выпадают только рыбы его аквариума", ownOnly)
+	end
+	local mp = M._newProfile()
+	mp.tanks.volcano = FishConfig.newTank()
+	mp.tanks.lagoon.fish = { { id = 1, species = "guppy", born = os.time() - 3600, earned = 0 } }
+	mp.tanks.volcano.fish = { { id = 2, species = "magma_crab", born = os.time() - 3600, earned = 0 } }
+	check("доход идёт со всех аквариумов", Economy.applyIncome(mp, 1, os.time()) == 2 + 24 and Economy.fishCount(mp) == 2)
 
 	-- ===== Шансы паков =====
 	local PackRoller = require(ServerScriptService.PackRoller)

@@ -17,16 +17,27 @@ function Economy.statsFor(profile, speciesId)
 	return stats
 end
 
+-- Сколько всего рыб во всех аквариумах игрока
+function Economy.fishCount(profile)
+	local count = 0
+	for _, tankData in pairs(profile.tanks) do
+		count += #tankData.fish
+	end
+	return count
+end
+
 -- Начислить доход за `ticks` тиков. Возраст рыб считаем на момент `at` (os.time).
 -- Плюсуем к монетам, к заработку рыбы и к статистике вида. Возвращает начисленную сумму.
 function Economy.applyIncome(profile, ticks, at)
 	local total = 0
-	for _, fish in ipairs(profile.fish) do
-		local amount = FishConfig.incomeOf(fish.species, fish.variant, math.max(0, at - fish.born)) * ticks
-		if amount > 0 then
-			fish.earned += amount
-			Economy.statsFor(profile, fish.species).earned += amount
-			total += amount
+	for _, tankData in pairs(profile.tanks) do
+		for _, fish in ipairs(tankData.fish) do
+			local amount = FishConfig.incomeOf(fish.species, fish.variant, math.max(0, at - fish.born)) * ticks
+			if amount > 0 then
+				fish.earned += amount
+				Economy.statsFor(profile, fish.species).earned += amount
+				total += amount
+			end
 		end
 	end
 	profile.coins += total

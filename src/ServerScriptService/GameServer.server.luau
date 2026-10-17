@@ -12,7 +12,7 @@ local PlayerData = require(ServerScriptService:WaitForChild("PlayerData"))
 local Economy = require(ServerScriptService:WaitForChild("Economy"))
 
 -- ===== НАСТРОЙКИ =====
--- Число мест в аквариуме хранится в профиле (profile.slots), максимум и цены — в FishConfig.
+-- Аквариумы игрока лежат в профиле (profile.tanks[id] = { slots, fish }), максимум мест и цены — в FishConfig.
 -- =====================
 
 local remotes = ReplicatedStorage:WaitForChild("Remotes")
@@ -26,6 +26,7 @@ local clientReadyEvent = remotes:WaitForChild("ClientReady")
 local buySlotEvent = remotes:WaitForChild("BuySlot")
 local adminCommandEvent = remotes:WaitForChild("AdminCommand")
 local offlineIncomeEvent = remotes:WaitForChild("OfflineIncome")
+local buyTankEvent = remotes:WaitForChild("BuyTank")
 
 local loaded = {} -- player -> true, когда профиль загружен
 
@@ -91,20 +92,26 @@ local function sendCoins(player, profile)
 	coinsChangedEvent:FireClient(player, profile.coins)
 end
 
--- Рыбы с их статистикой: id, вид, возраст в секундах, сколько заработала эта рыба
+-- Рыбы всех аквариумов со статистикой (id, аквариум, вид, вариант, возраст в секундах, заработок)
+-- и число мест в каждом открытом аквариуме: { [tankId] = slots }
 local function sendFish(player, profile)
 	local now = os.time()
 	local list = {}
-	for _, fish in ipairs(profile.fish) do
-		table.insert(list, {
-			id = fish.id,
-			species = fish.species,
-			variant = fish.variant or "normal",
-			age = math.max(0, now - fish.born),
-			earned = fish.earned,
-		})
+	local tanksInfo = {}
+	for tankId, tankData in pairs(profile.tanks) do
+		tanksInfo[tankId] = tankData.slots
+		for _, fish in ipairs(tankData.fish) do
+			table.insert(list, {
+				id = fish.id,
+				tank = tankId,
+				species = fish.species,
+				variant = fish.variant or "normal",
+				age = math.max(0, now - fish.born),
+				earned = fish.earned,
+			})
+		end
 	end
-	fishChangedEvent:FireClient(player, list, profile.slots)
+	fishChangedEvent:FireClient(player, list, tanksInfo)
 end
 
 -- Коллекция: найденные виды в порядке SpeciesOrder со статистикой (сколько раз выпала, сколько заработано)
@@ -199,8 +206,14 @@ openPackEvent.OnServerEvent:Connect(function(player, packId)
 		return
 	end
 
+	-- Аквариум пака должен быть открыт
+	local tankData = profile.tanks[pack.tank]
+	if tankData == nil then
+		return
+	end
+
 	-- Отказы — ДО списания монет
-	if #profile.fish >= profile.slots then
+	if #tankData.fish >= tankData.slots then
 		packResultEvent:FireClient(player, { ok = false, reason = "full" })
 		return
 	end
@@ -215,13 +228,13 @@ openPackEvent.OnServerEvent:Connect(function(player, packId)
 	local fishId = profile.nextFishId
 	profile.nextFishId += 1
 	local variant = FishConfig.rollVariant()
-	table.insert(profile.fish, { id = fishId, species = speciesId, variant = variant, born = os.time(), earned = 0 })
+	table.insert(tankData.fish, { id = fishId, species = speciesId, variant = variant, born = os.time(), earned = 0 })
 
 	local isNew = not profile.discovered[speciesId]
 	profile.discovered[speciesId] = true
 	statsFor(profile, speciesId).pulled += 1
 
-	print(player.Name, "открыл", packId, "->", speciesId, "монет:", profile.coins, "рыб:", #profile.fish)
+	print(player.Name, "открыл", packId, "->", speciesId, "монет:", profile.coins, "рыб:", #tankData.fish)
 	sendCoins(player, profile)
 	sendFish(player, profile)
 	sendCollection(player, profile)
@@ -229,19 +242,23 @@ openPackEvent.OnServerEvent:Connect(function(player, packId)
 end)
 
 -- ===== Покупка места в аквариуме =====
--- Аргументов нет: цену следующего места сервер берёт из FishConfig.SlotPrices.
-buySlotEvent.OnServerEvent:Connect(function(player)
+-- Клиент присылает только id аквариума: цену следующего места сервер берёт из FishConfig.
+buySlotEvent.OnServerEvent:Connect(function(player, tankId)
 	if not allow(player, "BuySlot", 2, 3) then
+		return
+	end
+	if typeof(tankId) ~= "string" then
 		return
 	end
 	local profile = PlayerData.get(player)
 	if profile == nil then
 		return
 	end
-	if profile.slots >= FishConfig.MAX_SLOTS then
+	local tankData = profile.tanks[tankId]
+	if tankData == nil or tankData.slots >= FishConfig.MAX_SLOTS then
 		return
 	end
-	local price = FishConfig.SlotPrices[profile.slots + 1]
+	local price = FishConfig.slotPrice(tankId, tankData.slots + 1)
 	if price == nil then
 		return
 	end
@@ -251,10 +268,39 @@ buySlotEvent.OnServerEvent:Connect(function(player)
 	end
 
 	profile.coins -= price
-	profile.slots += 1
-	print(player.Name, "купил место, всего мест:", profile.slots, "монет:", profile.coins)
+	tankData.slots += 1
+	print(player.Name, "купил место в", tankId, "всего мест:", tankData.slots, "монет:", profile.coins)
 	sendCoins(player, profile)
 	sendFish(player, profile) -- вместе со списком рыб уходит число мест
+end)
+
+-- ===== Покупка нового аквариума =====
+-- Клиент присылает только id аквариума; цену берёт сервер.
+buyTankEvent.OnServerEvent:Connect(function(player, tankId)
+	if not allow(player, "BuyTank", 2, 3) then
+		return
+	end
+	if typeof(tankId) ~= "string" then
+		return
+	end
+	local def = FishConfig.Tanks[tankId]
+	if def == nil then
+		return
+	end
+	local profile = PlayerData.get(player)
+	if profile == nil or profile.tanks[tankId] ~= nil then
+		return
+	end
+	if profile.coins < def.price then
+		packResultEvent:FireClient(player, { ok = false, reason = "coins" })
+		return
+	end
+
+	profile.coins -= def.price
+	profile.tanks[tankId] = FishConfig.newTank()
+	print(player.Name, "открыл аквариум", tankId, "монет:", profile.coins)
+	sendCoins(player, profile)
+	sendFish(player, profile)
 end)
 
 -- ===== Продажа =====
@@ -277,14 +323,16 @@ sellFishEvent.OnServerEvent:Connect(function(player, fishId)
 		return
 	end
 
-	for index, fish in ipairs(profile.fish) do
-		if fish.id == fishId then
-			local price = FishConfig.sellPriceOf(fish.species, fish.variant, os.time() - fish.born)
-			table.remove(profile.fish, index)
-			profile.coins += price
-			sendCoins(player, profile)
-			sendFish(player, profile)
-			return
+	for _, tankData in pairs(profile.tanks) do
+		for index, fish in ipairs(tankData.fish) do
+			if fish.id == fishId then
+				local price = FishConfig.sellPriceOf(fish.species, fish.variant, os.time() - fish.born)
+				table.remove(tankData.fish, index)
+				profile.coins += price
+				sendCoins(player, profile)
+				sendFish(player, profile)
+				return
+			end
 		end
 	end
 	-- рыбы с таким id у игрока нет — молча игнорируем
@@ -323,7 +371,11 @@ adminCommandEvent.OnServerEvent:Connect(function(player, cmd, value, extra)
 		if not isInteger(value) or value < FishConfig.START_SLOTS or value > FishConfig.MAX_SLOTS then
 			return
 		end
-		profile.slots = value
+		local tankData = profile.tanks[if typeof(extra) == "string" then extra else "lagoon"]
+		if tankData == nil then
+			return
+		end
+		tankData.slots = value
 	elseif cmd == "fish" then
 		if typeof(value) ~= "string" or FishConfig.Species[value] == nil then
 			return
@@ -331,21 +383,35 @@ adminCommandEvent.OnServerEvent:Connect(function(player, cmd, value, extra)
 		if extra ~= nil and (typeof(extra) ~= "string" or FishConfig.Variants[extra] == nil) then
 			return
 		end
-		if #profile.fish >= profile.slots then
+		local tankId = FishConfig.Species[value].tank
+		local tankData = profile.tanks[tankId]
+		if tankData == nil then
+			tankData = FishConfig.newTank()
+			profile.tanks[tankId] = tankData
+		end
+		if #tankData.fish >= tankData.slots then
 			packResultEvent:FireClient(player, { ok = false, reason = "full" })
 			return
 		end
 		local fishId = profile.nextFishId
 		profile.nextFishId += 1
-		table.insert(profile.fish, { id = fishId, species = value, variant = extra or "normal", born = os.time(), earned = 0 })
+		table.insert(tankData.fish, { id = fishId, species = value, variant = extra or "normal", born = os.time(), earned = 0 })
 		profile.discovered[value] = true
 		statsFor(profile, value).pulled += 1
 	elseif cmd == "age" then
 		if not isInteger(value) or value < 0 or value > MAX_ADMIN_AGE then
 			return
 		end
-		for _, fish in ipairs(profile.fish) do
-			fish.born -= value
+		for _, tankData in pairs(profile.tanks) do
+			for _, fish in ipairs(tankData.fish) do
+				fish.born -= value
+			end
+		end
+	elseif cmd == "unlock" then
+		for _, tankId in ipairs(FishConfig.TankOrder) do
+			if profile.tanks[tankId] == nil then
+				profile.tanks[tankId] = FishConfig.newTank()
+			end
 		end
 	elseif cmd == "reset" then
 		profile = PlayerData.reset(player)
@@ -367,7 +433,7 @@ task.spawn(function()
 		task.wait(FishConfig.INCOME_INTERVAL)
 		for _, player in ipairs(Players:GetPlayers()) do
 			local profile = PlayerData.get(player)
-			if profile ~= nil and #profile.fish > 0 then
+			if profile ~= nil and Economy.fishCount(profile) > 0 then
 				Economy.applyIncome(profile, 1, os.time())
 				if ready[player] then
 					sendCoins(player, profile)

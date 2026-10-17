@@ -20,6 +20,9 @@
         "BuySlot": {
           "$className": "RemoteEvent"
         },
+        "BuyTank": {
+          "$className": "RemoteEvent"
+        },
         "ClientReady": {
           "$className": "RemoteEvent"
         },

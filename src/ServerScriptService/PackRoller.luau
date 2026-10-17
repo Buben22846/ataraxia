@@ -22,9 +22,9 @@ function PackRoller.roll(pack, rng)
 		end
 	end
 
-	local pool = FishConfig.speciesOfRarity(chosenRarity)
+	local pool = FishConfig.speciesOfRarity(chosenRarity, pack.tank)
 	if #pool == 0 then
-		pool = FishConfig.SpeciesOrder -- защита на случай ошибки в конфиге
+		pool = FishConfig.speciesOfTank(pack.tank) -- защита на случай ошибки в конфиге
 	end
 	local speciesId = pool[rng:NextInteger(1, #pool)]
 	return speciesId, FishConfig.Species[speciesId].rarity

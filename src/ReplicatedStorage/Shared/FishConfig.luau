@@ -17,35 +17,91 @@ FishConfig.Rarities = {
 -- Виды рыб.
 --   income    — монет за один тик дохода (каждые INCOME_INTERVAL секунд)
 --   sellPrice — за сколько можно продать
+--   tank      — в каком аквариуме живёт вид (см. FishConfig.Tanks)
 FishConfig.Species = {
-	guppy = { name = "Гуппи", emoji = "🐟", rarity = "common", income = 1, sellPrice = 5 },
-	clown = { name = "Клоун", emoji = "🐠", rarity = "common", income = 2, sellPrice = 8 },
-	puffer = { name = "Фугу", emoji = "🐡", rarity = "rare", income = 4, sellPrice = 20 },
-	whale = { name = "Кит", emoji = "🐳", rarity = "epic", income = 10, sellPrice = 60 },
-	octopus = { name = "Осьминог", emoji = "🐙", rarity = "legendary", income = 25, sellPrice = 150 },
+	-- Тихая лагуна
+	guppy = { tank = "lagoon", name = "Гуппи", emoji = "🐟", rarity = "common", income = 1, sellPrice = 5 },
+	clown = { tank = "lagoon", name = "Клоун", emoji = "🐠", rarity = "common", income = 2, sellPrice = 8 },
+	puffer = { tank = "lagoon", name = "Фугу", emoji = "🐡", rarity = "rare", income = 4, sellPrice = 20 },
+	whale = { tank = "lagoon", name = "Кит", emoji = "🐳", rarity = "epic", income = 10, sellPrice = 60 },
+	octopus = { tank = "lagoon", name = "Осьминог", emoji = "🐙", rarity = "legendary", income = 25, sellPrice = 150 },
+	-- Вулканический риф
+	ember_shrimp = { tank = "volcano", name = "Лавовая креветка", emoji = "🦐", rarity = "common", income = 8, sellPrice = 40 },
+	magma_crab = { tank = "volcano", name = "Магмовый краб", emoji = "🦀", rarity = "common", income = 12, sellPrice = 55 },
+	fire_eel = { tank = "volcano", name = "Огненный угорь", emoji = "🐍", rarity = "rare", income = 32, sellPrice = 160 },
+	caldera_squid = { tank = "volcano", name = "Кальмар кальдеры", emoji = "🦑", rarity = "epic", income = 80, sellPrice = 480 },
+	magma_dragon = { tank = "volcano", name = "Магмовый дракон", emoji = "🐉", rarity = "legendary", income = 200, sellPrice = 1200 },
+	-- Ледяной грот
+	penguin = { tank = "arctic", name = "Пингвин", emoji = "🐧", rarity = "common", income = 60, sellPrice = 300 },
+	seal = { tank = "arctic", name = "Тюлень", emoji = "🦭", rarity = "common", income = 100, sellPrice = 450 },
+	polar_shark = { tank = "arctic", name = "Полярная акула", emoji = "🦈", rarity = "rare", income = 240, sellPrice = 1200 },
+	beluga = { tank = "arctic", name = "Белуха", emoji = "🐋", rarity = "epic", income = 600, sellPrice = 3600 },
+	narwhal = { tank = "arctic", name = "Нарвал", emoji = "🦄", rarity = "legendary", income = 1500, sellPrice = 9000 },
 }
 
 -- Порядок видов (для интерфейса коллекции и шансов)
-FishConfig.SpeciesOrder = { "guppy", "clown", "puffer", "whale", "octopus" }
+FishConfig.SpeciesOrder = {
+	"guppy", "clown", "puffer", "whale", "octopus",
+	"ember_shrimp", "magma_crab", "fire_eel", "caldera_squid", "magma_dragon",
+	"penguin", "seal", "polar_shark", "beluga", "narwhal",
+}
+
+-- Аквариумы. У каждого свои рыбы (Species.tank), свой пак и своя цена мест.
+--   price         — сколько стоит открыть (0 = есть с самого начала)
+--   pack          — id пака этого аквариума (FishConfig.Packs)
+--   slotPriceMult — во сколько раз дороже места, чем в лагуне
+--   color         — цвет воды (фон; позже заменим картинкой)
+FishConfig.Tanks = {
+	lagoon = { name = "Тихая лагуна", emoji = "🌊", price = 0, pack = "lagoon", slotPriceMult = 1, color = Color3.fromRGB(20, 110, 140) },
+	volcano = { name = "Вулканический риф", emoji = "🌋", price = 5000, pack = "volcano", slotPriceMult = 4, color = Color3.fromRGB(105, 36, 28) },
+	arctic = { name = "Ледяной грот", emoji = "❄️", price = 40000, pack = "arctic", slotPriceMult = 10, color = Color3.fromRGB(64, 120, 165) },
+}
+FishConfig.TankOrder = { "lagoon", "volcano", "arctic" }
 
 -- Порядок редкостей от частой к редкой
 FishConfig.RarityOrder = { "common", "rare", "epic", "legendary" }
 
 -- Паки. odds — шансы РЕДКОСТЕЙ в процентах, сумма должна быть 100.
 -- Внутри редкости вид выбирается равновероятно. Выпадение считает только сервер (PackRoller).
+-- tank — аквариум, виды которого выпадают из пака (и в который попадает рыба).
 FishConfig.Packs = {
-	common = {
-		name = "Обычный пак",
+	lagoon = {
+		name = "Пак лагуны",
+		tank = "lagoon",
 		price = 50,
+		odds = { common = 70, rare = 22, epic = 7, legendary = 1 },
+	},
+	volcano = {
+		name = "Пак вулкана",
+		tank = "volcano",
+		price = 400,
+		odds = { common = 70, rare = 22, epic = 7, legendary = 1 },
+	},
+	arctic = {
+		name = "Пак льда",
+		tank = "arctic",
+		price = 3000,
 		odds = { common = 70, rare = 22, epic = 7, legendary = 1 },
 	},
 }
 
--- Виды данной редкости (в порядке SpeciesOrder)
-function FishConfig.speciesOfRarity(rarity)
+-- Виды данной редкости (в порядке SpeciesOrder); tankId необязателен — тогда только виды этого аквариума
+function FishConfig.speciesOfRarity(rarity, tankId)
 	local list = {}
 	for _, id in ipairs(FishConfig.SpeciesOrder) do
-		if FishConfig.Species[id].rarity == rarity then
+		local species = FishConfig.Species[id]
+		if species.rarity == rarity and (tankId == nil or species.tank == tankId) then
+			table.insert(list, id)
+		end
+	end
+	return list
+end
+
+-- Все виды аквариума (в порядке SpeciesOrder)
+function FishConfig.speciesOfTank(tankId)
+	local list = {}
+	for _, id in ipairs(FishConfig.SpeciesOrder) do
+		if FishConfig.Species[id].tank == tankId then
 			table.insert(list, id)
 		end
 	end
@@ -148,5 +204,20 @@ end
 FishConfig.START_SLOTS = 5
 FishConfig.MAX_SLOTS = 10
 FishConfig.SlotPrices = { [6] = 500, [7] = 2000, [8] = 8000, [9] = 30000, [10] = 100000 }
+
+-- Цена места номер n в аквариуме tankId (nil, если такого места нет)
+function FishConfig.slotPrice(tankId, n)
+	local base = FishConfig.SlotPrices[n]
+	local tank = FishConfig.Tanks[tankId]
+	if base == nil or tank == nil then
+		return nil
+	end
+	return base * tank.slotPriceMult
+end
+
+-- Новый пустой аквариум игрока
+function FishConfig.newTank()
+	return { slots = FishConfig.START_SLOTS, fish = {} }
+end
 
 return FishConfig

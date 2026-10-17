@@ -13,7 +13,7 @@ local FishConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild
 -- ===== НАСТРОЙКИ =====
 -- Studio пишет в отдельное хранилище и никогда не трогает сохранения реальных игроков
 local STORE_NAME = if RunService:IsStudio() then "PlayerData_Studio_v1" else "PlayerData_v1"
-local CURRENT_VERSION = 3
+local CURRENT_VERSION = 4
 local START_COINS = 100 -- стартовые монеты нового игрока
 local AUTOSAVE_INTERVAL = 60 -- секунд между автосохранениями
 local LOCK_TIMEOUT = 150 -- блокировка старше этого считается «мёртвой» (сервер упал)
@@ -71,8 +71,9 @@ local function newProfile()
 		version = CURRENT_VERSION,
 		coins = START_COINS,
 		nextFishId = 1,
-		slots = FishConfig.START_SLOTS, -- сколько рыб помещается в аквариум
-		fish = {}, -- { {id, species, variant, born (время покупки, сек), earned (заработано этой рыбой)}, ... }
+		-- Аквариумы игрока: [tankId] = { slots = сколько рыб помещается, fish = { {id, species, variant, born, earned}, ... } }
+		-- У рыбы: born — время покупки (сек), earned — сколько заработала эта рыба.
+		tanks = { lagoon = FishConfig.newTank() },
 		discovered = {}, -- { [speciesId] = true }
 		speciesStats = {}, -- { [speciesId] = { pulled = сколько раз выпала, earned = всего заработано видом } }
 		lastSeen = os.time(), -- время последнего сохранения (для дохода в офлайне)
@@ -89,6 +90,13 @@ local MIGRATIONS = {
 	-- v2 -> v3: появилось время последнего сохранения (lastSeen) для дохода в офлайне.
 	[2] = function(data)
 		data.lastSeen = os.time()
+		return data
+	end,
+	-- v3 -> v4: несколько аквариумов; прежние рыбы и места переезжают в «Тихую лагуну».
+	[3] = function(data)
+		data.tanks = { lagoon = { slots = data.slots or FishConfig.START_SLOTS, fish = data.fish or {} } }
+		data.slots = nil
+		data.fish = nil
 		return data
 	end,
 }

@@ -21,6 +21,7 @@ local clientReadyEvent = remotes:WaitForChild("ClientReady")
 local buySlotEvent = remotes:WaitForChild("BuySlot")
 local adminCommandEvent = remotes:WaitForChild("AdminCommand")
 local offlineIncomeEvent = remotes:WaitForChild("OfflineIncome")
+local buyTankEvent = remotes:WaitForChild("BuyTank")
 
 local FishConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("FishConfig"))
 
@@ -30,7 +31,7 @@ local FISH_SPEED = 0.1
 local FISH_ZINDEX = 2 -- выше фона (1), ниже кнопок и монет (3)
 local MIN_X, MAX_X = 0.14, 0.86
 local MIN_Y, MAX_Y = 0.36, 0.68 -- верх занят карточкой статистики выбранной рыбы
-local PACK_ID = "common" -- какой пак продаёт главная кнопка
+local currentTank = "lagoon" -- какой аквариум сейчас на экране
 
 local WHITE = Color3.fromRGB(255, 255, 255)
 local COLOR_PANEL = Color3.fromRGB(10, 70, 95)
@@ -63,7 +64,7 @@ end
 local function speciesChances(pack)
 	local result = {}
 	for _, rarity in ipairs(FishConfig.RarityOrder) do
-		local pool = FishConfig.speciesOfRarity(rarity)
+		local pool = FishConfig.speciesOfRarity(rarity, pack.tank)
 		for _, id in ipairs(pool) do
 			result[id] = (pack.odds[rarity] or 0) / #pool
 		end
@@ -71,20 +72,27 @@ local function speciesChances(pack)
 	return result
 end
 
-local pack = FishConfig.Packs[PACK_ID]
+-- Пак текущего аквариума
+local function currentPack()
+	return FishConfig.Packs[FishConfig.Tanks[currentTank].pack]
+end
 local totalSpecies = #FishConfig.SpeciesOrder
 local discovered = {} -- id вида -> true (собранные виды, присылает сервер)
 local revealBusy = false -- идёт анимация открытия пака
 local pendingReveals = {} -- очередь результатов, если они пришли во время анимации
 
 -- ===== Монеты и покупка пака =====
-buyButton.Text = pack.name .. " (" .. tostring(pack.price) .. ")"
+local function refreshBuyButton()
+	local pack = currentPack()
+	buyButton.Text = pack.name .. " (" .. tostring(pack.price) .. ")"
+end
+refreshBuyButton()
 
 buyButton.Activated:Connect(function()
 	if revealBusy then
 		return
 	end
-	openPackEvent:FireServer(PACK_ID) -- отправляем только id пака
+	openPackEvent:FireServer(FishConfig.Tanks[currentTank].pack) -- отправляем только id пака
 end)
 
 coinsChangedEvent.OnClientEvent:Connect(function(newCoins)
@@ -127,12 +135,14 @@ local fishCountLabel = make("TextLabel", {
 	ZIndex = 3,
 }, gui)
 
-local slots = FishConfig.START_SLOTS -- сколько рыб помещается (присылает сервер)
-local fishTotal = 0 -- сколько рыб сейчас
+local tankSlots = {} -- [tankId] = сколько рыб помещается (присылает сервер; нет записи = аквариум не открыт)
+local tankCounts = {} -- [tankId] = сколько рыб сейчас
+local onTanksChanged = nil -- обновление окна выбора аквариума (задаётся ниже)
 
 local function refreshSlotsUi()
-	fishCountLabel.Text = "🐟 " .. tostring(fishTotal) .. "/" .. tostring(slots)
-	local nextPrice = FishConfig.SlotPrices[slots + 1]
+	local slots = tankSlots[currentTank] or FishConfig.START_SLOTS
+	fishCountLabel.Text = "🐟 " .. tostring(tankCounts[currentTank] or 0) .. "/" .. tostring(slots)
+	local nextPrice = FishConfig.slotPrice(currentTank, slots + 1)
 	if nextPrice == nil or slots >= FishConfig.MAX_SLOTS then
 		expandButton.Text = "Мест: максимум"
 		expandButton.BackgroundColor3 = COLOR_MUTED
@@ -143,8 +153,8 @@ local function refreshSlotsUi()
 end
 
 expandButton.Activated:Connect(function()
-	if slots < FishConfig.MAX_SLOTS then
-		buySlotEvent:FireServer() -- без аргументов: цену берёт сервер
+	if (tankSlots[currentTank] or FishConfig.START_SLOTS) < FishConfig.MAX_SLOTS then
+		buySlotEvent:FireServer(currentTank) -- только id аквариума: цену берёт сервер
 	end
 end)
 refreshSlotsUi()
@@ -250,7 +260,7 @@ end
 
 local function clearRows(list)
 	for _, child in ipairs(list:GetChildren()) do
-		if child:IsA("Frame") then
+		if child:IsA("GuiObject") then
 			child:Destroy()
 		end
 	end
@@ -317,10 +327,17 @@ end
 local function refreshCollection()
 	local count = discoveredCount()
 	collectionButton.Text = "Коллекция " .. count .. "/" .. totalSpecies
-	collectionPanel.title.Text = "Коллекция: " .. count .. "/" .. totalSpecies
+	local tankIds = FishConfig.speciesOfTank(currentTank)
+	local tankFound = 0
+	for _, id in ipairs(tankIds) do
+		if discovered[id] then
+			tankFound += 1
+		end
+	end
+	collectionPanel.title.Text = FishConfig.Tanks[currentTank].name .. ": " .. tankFound .. "/" .. #tankIds .. " (всего " .. count .. "/" .. totalSpecies .. ")"
 
 	clearRows(collectionPanel.list)
-	for index, id in ipairs(FishConfig.SpeciesOrder) do
+	for index, id in ipairs(tankIds) do
 		local species = FishConfig.Species[id]
 		local rarity = FishConfig.Rarities[species.rarity]
 		local entry = discovered[id]
@@ -381,10 +398,11 @@ do
 end
 
 oddsButton.Activated:Connect(function()
+	local pack = currentPack()
 	oddsPanel.title.Text = "Шансы: " .. pack.name
 	clearRows(oddsPanel.list)
 	local chances = speciesChances(pack)
-	for index, id in ipairs(FishConfig.SpeciesOrder) do
+	for index, id in ipairs(FishConfig.speciesOfTank(pack.tank)) do
 		local species = FishConfig.Species[id]
 		local rarity = FishConfig.Rarities[species.rarity]
 		addRow(
@@ -754,6 +772,7 @@ local function addFish(fishData)
 	label.Text = species.emoji
 	label.TextScaled = true
 	label.ZIndex = FISH_ZINDEX
+	label.Visible = fishData.tank == currentTank -- рыбы других аквариумов скрыты
 	label.Parent = tank
 
 	-- Рыба квадратная и не мельчает/не раздувается на разных экранах
@@ -811,11 +830,14 @@ local function removeFish(id)
 end
 
 -- Сервер прислал ВЕСЬ список рыб: сверяем с экраном
-fishChangedEvent.OnClientEvent:Connect(function(fishList, newSlots)
+fishChangedEvent.OnClientEvent:Connect(function(fishList, tanksInfo)
 	local present = {}
-	fishTotal = #fishList
-	if typeof(newSlots) == "number" then
-		slots = newSlots
+	tankCounts = {}
+	for _, fishData in ipairs(fishList) do
+		tankCounts[fishData.tank] = (tankCounts[fishData.tank] or 0) + 1
+	end
+	if typeof(tanksInfo) == "table" then
+		tankSlots = tanksInfo
 	end
 	refreshSlotsUi()
 
@@ -838,6 +860,9 @@ fishChangedEvent.OnClientEvent:Connect(function(fishList, newSlots)
 	end
 
 	refreshSelection()
+	if onTanksChanged then
+		onTanksChanged()
+	end
 end)
 
 -- Возраст выбранной рыбы обновляем раз в секунду
@@ -849,6 +874,98 @@ task.spawn(function()
 		end
 	end
 end)
+
+-- ===== Выбор аквариума =====
+local tankButton = make("TextButton", {
+	Name = "TankButton",
+	Position = UDim2.fromScale(0.47, 0.063),
+	Size = UDim2.fromScale(0.51, 0.08),
+	BackgroundColor3 = COLOR_PANEL,
+	BorderSizePixel = 0,
+	TextScaled = true,
+	TextColor3 = WHITE,
+	Font = FONT,
+	ZIndex = 3,
+}, gui)
+
+local tanksPanel = makePanel("TanksPanel")
+tanksPanel.title.Text = "Аквариумы"
+make("TextLabel", {
+	Name = "Hint",
+	Position = UDim2.fromScale(0.05, 0.775),
+	Size = UDim2.fromScale(0.9, 0.06),
+	BackgroundTransparency = 1,
+	Text = "У каждого аквариума свои рыбы и пак · доход идёт со всех сразу",
+	TextScaled = true,
+	TextColor3 = COLOR_MUTED,
+	Font = FONT,
+	ZIndex = 12,
+}, tanksPanel.overlay.Card)
+
+local function refreshTankButton()
+	local def = FishConfig.Tanks[currentTank]
+	tankButton.Text = def.emoji .. " " .. def.name .. " ▾"
+end
+
+-- Переключение аквариума: цвет воды, видимые рыбы, кнопки, коллекция
+local function switchTank(id)
+	currentTank = id
+	selectedId = nil
+	TweenService:Create(tank, TweenInfo.new(0.6), { BackgroundColor3 = FishConfig.Tanks[id].color }):Play()
+	for _, fish in pairs(fishById) do
+		fish.label.Visible = fish.data.tank == currentTank
+	end
+	refreshTankButton()
+	refreshBuyButton()
+	refreshSlotsUi()
+	refreshCollection()
+	refreshSelection()
+end
+
+local function refreshTanksPanel()
+	clearRows(tanksPanel.list)
+	for index, id in ipairs(FishConfig.TankOrder) do
+		local def = FishConfig.Tanks[id]
+		local owned = tankSlots[id] ~= nil
+		local status = if id == currentTank then "сейчас здесь" elseif owned then "открыть" else "купить за " .. tostring(def.price)
+		local row = make("TextButton", {
+			Size = UDim2.fromScale(1, 0.15),
+			BackgroundColor3 = if id == currentTank then COLOR_BUTTON elseif owned then COLOR_ROW else COLOR_MUTED,
+			BorderSizePixel = 0,
+			Text = def.emoji .. " " .. def.name .. " — " .. status,
+			TextScaled = true,
+			TextColor3 = WHITE,
+			Font = FONT,
+			LayoutOrder = index,
+			ZIndex = 13,
+		}, tanksPanel.list)
+		make("UICorner", { CornerRadius = UDim.new(0.2, 0) }, row)
+		row.Activated:Connect(function()
+			if owned then
+				switchTank(id)
+				tanksPanel.overlay.Visible = false
+			else
+				buyTankEvent:FireServer(id) -- только id: цену берёт сервер
+			end
+		end)
+	end
+end
+
+onTanksChanged = function()
+	if tankSlots[currentTank] == nil then
+		switchTank("lagoon") -- например, после сброса прогресса открыта только лагуна
+	end
+	if tanksPanel.overlay.Visible then
+		refreshTanksPanel()
+	end
+end
+
+tankButton.Activated:Connect(function()
+	refreshTanksPanel()
+	tanksPanel.overlay.Visible = true
+end)
+tank.BackgroundColor3 = FishConfig.Tanks[currentTank].color
+refreshTankButton()
 
 -- ===== Панель администратора (видна только админам; права всё равно проверяет сервер) =====
 local localPlayer = Players.LocalPlayer
@@ -865,7 +982,7 @@ local function buildAdminPanel()
 
 	local function addButton(order, text, onTap)
 		local button = make("TextButton", {
-			Size = UDim2.fromScale(1, 0.11),
+			Size = UDim2.fromScale(1, 0.1),
 			BackgroundColor3 = COLOR_ROW,
 			BorderSizePixel = 0,
 			Text = text,
@@ -889,8 +1006,9 @@ local function buildAdminPanel()
 		adminCommandEvent:FireServer("coins", 100000)
 	end)
 	addButton(3, "+1 место в аквариуме", function()
-		if slots < FishConfig.MAX_SLOTS then
-			adminCommandEvent:FireServer("slots", slots + 1)
+		local owned = tankSlots[currentTank] or FishConfig.START_SLOTS
+		if owned < FishConfig.MAX_SLOTS then
+			adminCommandEvent:FireServer("slots", owned + 1, currentTank)
 		end
 	end)
 
@@ -920,6 +1038,10 @@ local function buildAdminPanel()
 		adminCommandEvent:FireServer("age", 3600)
 	end)
 
+	addButton(7, "Открыть все аквариумы", function()
+		adminCommandEvent:FireServer("unlock")
+	end)
+
 	-- Сброс — только после повторного нажатия в течение 3 секунд
 	local resetArmed = false
 	local function disarm(button)
@@ -927,7 +1049,7 @@ local function buildAdminPanel()
 		button.Text = "Сбросить прогресс"
 		button.BackgroundColor3 = COLOR_ROW
 	end
-	addButton(7, "Сбросить прогресс", function(button)
+	addButton(8, "Сбросить прогресс", function(button)
 		if not resetArmed then
 			resetArmed = true
 			button.Text = "Точно? Нажмите ещё раз"
