@@ -211,6 +211,24 @@ local TEXT = {
 		daily_done = "Забрано",
 		daily_got = "Награда получена: +%s 💰",
 
+		-- Магазин за Robux (цену показывает окно Roblox)
+		shop_title = "Магазин",
+		shop_double_title = "Двойной доход ×2",
+		shop_double_desc = "Все рыбы приносят вдвое больше монет, и онлайн, и пока вас нет",
+		shop_owned = "✓ Куплено",
+		shop_buy = "Купить",
+		shop_coins_title = "Монеты: %s дохода",
+		shop_coins_desc = "Монеты, равные вашему текущему доходу за %s",
+		shop_unlocked = "Двойной доход включён! ×2",
+		shop_error = "Не удалось открыть покупку",
+		dur_h_1 = "%s час",
+		dur_h_2 = "%s часа",
+		dur_h_5 = "%s часов",
+		dur_m_1 = "%s минута",
+		dur_m_2 = "%s минуты",
+		dur_m_5 = "%s минут",
+		dur_s = "%s сек.",
+
 		-- Звук
 		sound_toggle = "Звук",
 
@@ -275,6 +293,23 @@ local TEXT = {
 		daily_next = "Next reward in %s",
 		daily_done = "Claimed",
 		daily_got = "Reward claimed: +%s 💰",
+
+		shop_title = "Shop",
+		shop_double_title = "Double Coins ×2",
+		shop_double_desc = "All fish earn twice as many coins, both online and while you're away",
+		shop_owned = "✓ Owned",
+		shop_buy = "Buy",
+		shop_coins_title = "Coins: %s of income",
+		shop_coins_desc = "Coins equal to %s of your current income",
+		shop_unlocked = "Double Coins unlocked! ×2",
+		shop_error = "Couldn't open the purchase",
+		dur_h_1 = "%s hour",
+		dur_h_2 = "%s hours",
+		dur_h_5 = "%s hours",
+		dur_m_1 = "%s minute",
+		dur_m_2 = "%s minutes",
+		dur_m_5 = "%s minutes",
+		dur_s = "%s sec",
 
 		sound_toggle = "Sound",
 
