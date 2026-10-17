@@ -1,0 +1,211 @@
+{
+  "name": "Ataraxia",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
+      "$ignoreUnknownInstances": true,
+      "Shared": {
+        "$className": "Folder",
+        "FishConfig": {
+          "$path": "src/ReplicatedStorage/Shared/FishConfig.luau"
+        }
+      },
+      "Remotes": {
+        "$className": "Folder",
+        "$ignoreUnknownInstances": true,
+        "AdminCommand": {
+          "$className": "RemoteEvent"
+        },
+        "BuySlot": {
+          "$className": "RemoteEvent"
+        },
+        "ClientReady": {
+          "$className": "RemoteEvent"
+        },
+        "CoinsChanged": {
+          "$className": "RemoteEvent"
+        },
+        "CollectionChanged": {
+          "$className": "RemoteEvent"
+        },
+        "FishChanged": {
+          "$className": "RemoteEvent"
+        },
+        "OpenPack": {
+          "$className": "RemoteEvent"
+        },
+        "PackResult": {
+          "$className": "RemoteEvent"
+        },
+        "SellFish": {
+          "$className": "RemoteEvent"
+        }
+      }
+    },
+    "ServerScriptService": {
+      "$className": "ServerScriptService",
+      "$ignoreUnknownInstances": true,
+      "GameServer": {
+        "$path": "src/ServerScriptService/GameServer.server.luau"
+      },
+      "PlayerData": {
+        "$path": "src/ServerScriptService/PlayerData.luau"
+      },
+      "PackRoller": {
+        "$path": "src/ServerScriptService/PackRoller.luau"
+      }
+    },
+    "ServerStorage": {
+      "$className": "ServerStorage",
+      "$ignoreUnknownInstances": true,
+      "Tests": {
+        "$className": "Folder",
+        "RunAll": {
+          "$path": "src/ServerStorage/Tests/RunAll.luau"
+        }
+      }
+    },
+    "StarterGui": {
+      "$className": "StarterGui",
+      "$ignoreUnknownInstances": true,
+      "AquariumGui": {
+        "$className": "ScreenGui",
+        "$properties": {
+          "ResetOnSpawn": false,
+          "IgnoreGuiInset": true,
+          "ScreenInsets": "DeviceSafeInsets",
+          "ClipToDeviceSafeArea": true
+        },
+        "AquariumClient": {
+          "$path": "src/StarterGui/AquariumGui/AquariumClient.client.luau"
+        },
+        "Tank": {
+          "$className": "Frame",
+          "$properties": {
+            "Size": {
+              "UDim2": [
+                [
+                  1,
+                  0
+                ],
+                [
+                  1,
+                  0
+                ]
+              ]
+            },
+            "BackgroundColor3": [
+              0.0784314,
+              0.431373,
+              0.54902
+            ],
+            "BorderSizePixel": 0,
+            "ZIndex": 1
+          }
+        },
+        "CoinsLabel": {
+          "$className": "TextLabel",
+          "$properties": {
+            "Position": {
+              "UDim2": [
+                [
+                  0,
+                  0
+                ],
+                [
+                  0.0632414,
+                  0
+                ]
+              ]
+            },
+            "Size": {
+              "UDim2": [
+                [
+                  0.3,
+                  0
+                ],
+                [
+                  0.08,
+                  0
+                ]
+              ]
+            },
+            "BackgroundColor3": [
+              0.0392157,
+              0.27451,
+              0.372549
+            ],
+            "BackgroundTransparency": 0.3,
+            "BorderSizePixel": 0,
+            "Text": "Монеты: 100",
+            "TextColor3": [
+              0.415686,
+              1,
+              0.34902
+            ],
+            "TextScaled": true,
+            "Font": "GothamBold",
+            "ZIndex": 3
+          }
+        },
+        "BuyButton": {
+          "$className": "TextButton",
+          "$properties": {
+            "AnchorPoint": [
+              0.5,
+              1
+            ],
+            "Position": {
+              "UDim2": [
+                [
+                  0.5,
+                  0
+                ],
+                [
+                  0.97,
+                  0
+                ]
+              ]
+            },
+            "Size": {
+              "UDim2": [
+                [
+                  0.9,
+                  0
+                ],
+                [
+                  0.11,
+                  0
+                ]
+              ]
+            },
+            "BackgroundColor3": [
+              0.14902,
+              0.65098,
+              0.603922
+            ],
+            "BorderSizePixel": 0,
+            "Text": "Обычный пак (50)",
+            "TextColor3": [
+              1,
+              1,
+              1
+            ],
+            "TextScaled": true,
+            "Font": "GothamBold",
+            "ZIndex": 3
+          }
+        }
+      }
+    },
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+      "$ignoreUnknownInstances": true,
+      "$properties": {
+        "DevTouchMovementMode": "Scriptable",
+        "DevComputerMovementMode": "Scriptable"
+      }
+    }
+  }
+}
