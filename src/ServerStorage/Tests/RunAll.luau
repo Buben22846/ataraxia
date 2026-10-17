@@ -332,12 +332,11 @@ return function()
 	local lagoonSpecies = FishConfig.speciesOfTank("lagoon")
 	local cp = { coins = 0, tanks = { lagoon = FishConfig.newTank() }, discovered = {}, seen = {}, speciesStats = {} }
 	check("набор: пустая коллекция без бонуса", Collection.bonus(cp, "lagoon") == 0)
-	for index, id in ipairs(lagoonSpecies) do
-		cp.discovered[id] = true
-		if index == #lagoonSpecies then
-			check("набор: 4 из 5 видов бонуса не дают", Collection.bonus(cp, "lagoon") == 0)
-		end
+	for index = 1, #lagoonSpecies - 1 do
+		cp.discovered[lagoonSpecies[index]] = true
 	end
+	check("набор: 4 из 5 видов бонуса не дают", Collection.bonus(cp, "lagoon") == 0)
+	cp.discovered[lagoonSpecies[#lagoonSpecies]] = true
 	check("набор: все виды лагуны дают +10%", math.abs(Collection.bonus(cp, "lagoon") - 0.10) < 1e-9)
 	check("набор: бонус лагуны не действует на вулкан", Collection.bonus(cp, "volcano") == 0)
 	for _, id in ipairs(lagoonSpecies) do
