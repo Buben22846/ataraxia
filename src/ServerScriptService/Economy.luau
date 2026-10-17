@@ -28,11 +28,13 @@ end
 
 -- Начислить доход за `ticks` тиков. Возраст рыб считаем на момент `at` (os.time).
 -- Плюсуем к монетам, к заработку рыбы и к статистике вида. Возвращает начисленную сумму.
-function Economy.applyIncome(profile, ticks, at)
+-- multiplier (необязателен) — бонус игрока, например x2 по геймпассу; он применяется к каждому доходу.
+function Economy.applyIncome(profile, ticks, at, multiplier)
+	multiplier = multiplier or 1
 	local total = 0
 	for _, tankData in pairs(profile.tanks) do
 		for _, fish in ipairs(tankData.fish) do
-			local amount = FishConfig.incomeOf(fish.species, fish.variant, math.max(0, at - fish.born)) * ticks
+			local amount = FishConfig.incomeOf(fish.species, fish.variant, math.max(0, at - fish.born)) * ticks * multiplier
 			if amount > 0 then
 				fish.earned += amount
 				Economy.statsFor(profile, fish.species).earned += amount
@@ -44,8 +46,19 @@ function Economy.applyIncome(profile, ticks, at)
 	return total
 end
 
+-- Сколько монет приносят все рыбы за один тик (без бонусов) на момент at
+function Economy.incomePerTick(profile, at)
+	local total = 0
+	for _, tankData in pairs(profile.tanks) do
+		for _, fish in ipairs(tankData.fish) do
+			total += FishConfig.incomeOf(fish.species, fish.variant, math.max(0, at - fish.born))
+		end
+	end
+	return total
+end
+
 -- Доход за время, пока игрока не было (от profile.lastSeen до now). Возвращает начисленную сумму.
-function Economy.applyOffline(profile, now)
+function Economy.applyOffline(profile, now, multiplier)
 	local last = profile.lastSeen
 	if type(last) ~= "number" then
 		return 0
@@ -54,7 +67,7 @@ function Economy.applyOffline(profile, now)
 	if ticks <= 0 then
 		return 0
 	end
-	return Economy.applyIncome(profile, ticks, last)
+	return Economy.applyIncome(profile, ticks, last, multiplier)
 end
 
 return Economy

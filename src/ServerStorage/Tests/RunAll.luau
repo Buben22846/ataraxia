@@ -258,6 +258,25 @@ return function()
 	local got8, streak8 = DailyReward.claim(rp, t0)
 	check("награда: после 7-го дня круг начинается заново", streak8 == 8 and got8 == FishConfig.DailyRewards[1])
 
+	-- ===== Магазин и множитель дохода =====
+	local Shop = require(ServerScriptService.Shop)
+	local Economy = require(ServerScriptService.Economy)
+	local sp = { coins = 0, tanks = { lagoon = { slots = 5, fish = { { id = 1, species = "guppy", variant = "normal", born = 0, earned = 0 } } } }, speciesStats = {} }
+	local base = Economy.applyIncome(sp, 1, 0)
+	local sp2 = { coins = 0, tanks = { lagoon = { slots = 5, fish = { { id = 1, species = "guppy", variant = "normal", born = 0, earned = 0 } } } }, speciesStats = {} }
+	local doubled = Economy.applyIncome(sp2, 1, 0, 2)
+	check("множитель x2 удваивает доход", doubled == base * 2 and base > 0)
+	check("доход за тик без бонусов считается", Economy.incomePerTick(sp, 0) == base)
+	local shopOk = FishConfig.Shop.Products[1].productId == 0
+	check("пока id товаров = 0, товар не находится", Shop.productById(0) == nil and shopOk)
+	FishConfig.Shop.Products[1].productId = 111
+	local shopProfile = { coins = 0, tanks = { lagoon = FishConfig.newTank() }, speciesStats = {}, receipts = { list = {}, seen = {} } }
+	check("товар: пустой аквариум даёт минимум монет", Shop.coinsFor(shopProfile, FishConfig.Shop.Products[1], 1000) == FishConfig.Shop.MIN_COINS)
+	check("товар: первая выдача по чеку", Shop.grant(shopProfile, 111, "p1", 1000) == "granted" and shopProfile.coins == FishConfig.Shop.MIN_COINS)
+	check("товар: тот же чек второй раз не даёт монет", Shop.grant(shopProfile, 111, "p1", 1000) == "duplicate" and shopProfile.coins == FishConfig.Shop.MIN_COINS)
+	check("товар: неизвестный id не выдаётся", Shop.grant(shopProfile, 999, "p2", 1000) == "unknown")
+	FishConfig.Shop.Products[1].productId = 0
+
 	-- ===== Конфиг =====
 	for packId, pack in pairs(FishConfig.Packs) do
 		local sum = 0

@@ -67,6 +67,9 @@
         },
         "TutorialDone": {
           "$className": "RemoteEvent"
+        },
+        "ShopState": {
+          "$className": "RemoteEvent"
         }
       }
     },
@@ -87,6 +90,9 @@
       },
       "DailyReward": {
         "$path": "src/ServerScriptService/DailyReward.luau"
+      },
+      "Shop": {
+        "$path": "src/ServerScriptService/Shop.luau"
       }
     },
     "ServerStorage": {

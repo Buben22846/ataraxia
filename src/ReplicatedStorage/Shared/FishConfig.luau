@@ -37,6 +37,12 @@ FishConfig.Species = {
 	polar_shark = { tank = "arctic", name = "Полярная акула", emoji = "🦈", rarity = "rare", income = 240, sellPrice = 1200 },
 	beluga = { tank = "arctic", name = "Белуха", emoji = "🐋", rarity = "epic", income = 600, sellPrice = 3600 },
 	narwhal = { tank = "arctic", name = "Нарвал", emoji = "🦄", rarity = "legendary", income = 1500, sellPrice = 9000 },
+	-- Бездна
+	lantern_fish = { tank = "abyss", name = "Рыба-фонарик", emoji = "🔦", rarity = "common", income = 400, sellPrice = 2400 },
+	jellyfish = { tank = "abyss", name = "Медуза", emoji = "🪼", rarity = "common", income = 700, sellPrice = 4200 },
+	anglerfish = { tank = "abyss", name = "Удильщик", emoji = "🎣", rarity = "rare", income = 1600, sellPrice = 9600 },
+	abyss_ray = { tank = "abyss", name = "Глубинный скат", emoji = "🪽", rarity = "epic", income = 4000, sellPrice = 24000 },
+	leviathan = { tank = "abyss", name = "Левиафан", emoji = "🐲", rarity = "legendary", income = 10000, sellPrice = 60000 },
 }
 
 -- Порядок видов (для интерфейса коллекции и шансов)
@@ -44,6 +50,7 @@ FishConfig.SpeciesOrder = {
 	"guppy", "clown", "puffer", "whale", "octopus",
 	"ember_shrimp", "magma_crab", "fire_eel", "caldera_squid", "magma_dragon",
 	"penguin", "seal", "polar_shark", "beluga", "narwhal",
+	"lantern_fish", "jellyfish", "anglerfish", "abyss_ray", "leviathan",
 }
 
 -- Аквариумы. У каждого свои рыбы (Species.tank), свой пак и своя цена мест.
@@ -56,8 +63,9 @@ FishConfig.Tanks = {
 	lagoon = { name = "Тихая лагуна", emoji = "🌊", price = 0, pack = "lagoon", slotPriceMult = 1, color = Color3.fromRGB(20, 110, 140), background = "bg_lagoon" },
 	volcano = { name = "Вулканический риф", emoji = "🌋", price = 5000, pack = "volcano", slotPriceMult = 4, color = Color3.fromRGB(105, 36, 28), background = "bg_volcano" },
 	arctic = { name = "Ледяной грот", emoji = "❄️", price = 150000, pack = "arctic", slotPriceMult = 10, color = Color3.fromRGB(64, 120, 165), background = "bg_arctic" },
+	abyss = { name = "Бездна", emoji = "🌌", price = 1500000, pack = "abyss", slotPriceMult = 25, color = Color3.fromRGB(12, 22, 52), background = "bg_abyss" },
 }
-FishConfig.TankOrder = { "lagoon", "volcano", "arctic" }
+FishConfig.TankOrder = { "lagoon", "volcano", "arctic", "abyss" }
 
 -- Порядок редкостей от частой к редкой
 FishConfig.RarityOrder = { "common", "rare", "epic", "legendary" }
@@ -82,6 +90,12 @@ FishConfig.Packs = {
 		name = "Пак льда",
 		tank = "arctic",
 		price = 3000,
+		odds = { common = 70, rare = 22, epic = 7, legendary = 1 },
+	},
+	abyss = {
+		name = "Пак бездны",
+		tank = "abyss",
+		price = 22000,
 		odds = { common = 70, rare = 22, epic = 7, legendary = 1 },
 	},
 }
@@ -128,6 +142,21 @@ FishConfig.Variants = {
 	rainbow = { name = "Радужная", mult = 5, weight = 1, emoji = "🌈", color = Color3.fromRGB(240, 98, 146) },
 }
 FishConfig.VariantOrder = { "normal", "golden", "rainbow" }
+
+-- ===== Магазин за Robux =====
+-- ВАЖНО: id создаются в Creator Hub (Monetization -> Passes / Developer Products). Пока id = 0, товар не продаётся
+-- и кнопка магазина скрыта. Шансы паков за Robux НЕ продаём: все паки только за монеты.
+--   DoubleCoins.mult — во сколько раз растёт весь доход (и онлайн, и офлайн)
+--   Products[i].seconds — товар даёт монеты, равные столькому времени текущего дохода (но не меньше MIN_COINS),
+--   поэтому он честен и в начале игры, и в конце.
+FishConfig.Shop = {
+	DoubleCoins = { passId = 0, mult = 2 },
+	Products = {
+		{ key = "coins_1h", productId = 0, seconds = 3600 },
+		{ key = "coins_8h", productId = 0, seconds = 28800 },
+	},
+	MIN_COINS = 500,
+}
 
 -- ===== Ежедневная награда =====
 -- Заходишь каждый день подряд — награда растёт (7 дней по кругу). Пропустил день — серия начинается заново.

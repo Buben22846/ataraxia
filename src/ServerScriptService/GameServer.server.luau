@@ -12,6 +12,8 @@ local PlayerData = require(ServerScriptService:WaitForChild("PlayerData"))
 local Economy = require(ServerScriptService:WaitForChild("Economy"))
 local DailyReward = require(ServerScriptService:WaitForChild("DailyReward"))
 local AnalyticsService = game:GetService("AnalyticsService")
+local MarketplaceService = game:GetService("MarketplaceService")
+local Shop = require(ServerScriptService:WaitForChild("Shop"))
 
 -- ===== НАСТРОЙКИ =====
 -- Аквариумы игрока лежат в профиле (profile.tanks[id] = { slots, fish }), максимум мест и цены — в FishConfig.
@@ -32,6 +34,32 @@ local buyTankEvent = remotes:WaitForChild("BuyTank")
 local claimDailyEvent = remotes:WaitForChild("ClaimDaily")
 local dailyStateEvent = remotes:WaitForChild("DailyState")
 local tutorialDoneEvent = remotes:WaitForChild("TutorialDone")
+local shopStateEvent = remotes:WaitForChild("ShopState")
+
+-- ===== Покупки за Robux =====
+-- Геймпасс «x2 монеты» проверяем у MarketplaceService при входе и после покупки; результат помним на сервере.
+local hasDoubleCoins = {} -- player -> true
+local function incomeMultiplier(player)
+	if hasDoubleCoins[player] then
+		return FishConfig.Shop.DoubleCoins.mult
+	end
+	return 1
+end
+local function sendShopState(player)
+	shopStateEvent:FireClient(player, { doubleCoins = hasDoubleCoins[player] == true })
+end
+local function refreshPasses(player)
+	local passId = FishConfig.Shop.DoubleCoins.passId
+	if passId == 0 then
+		return
+	end
+	local ok, owns = pcall(function()
+		return MarketplaceService:UserOwnsGamePassAsync(player.UserId, passId)
+	end)
+	if ok and owns then
+		hasDoubleCoins[player] = true
+	end
+end
 
 -- ===== Аналитика: воронка «где игроки бросают игру» (шаги видны в Creator Hub -> Analytics) =====
 -- 1 зашёл, 2 открыл первый пак, 3 прошёл обучение, 4 забрал ежедневную награду, 5 купил второй аквариум.
@@ -162,6 +190,7 @@ local function pushState(player)
 
 	dailyStateEvent:FireClient(player, DailyReward.state(profile, os.time()))
 	tutorialDoneEvent:FireClient(player, profile.tutorialDone)
+	sendShopState(player)
 
 	local gained = pendingOffline[player]
 	if gained then
@@ -185,7 +214,8 @@ local function onPlayerAdded(player)
 	player:SetAttribute("IsAdmin", isAdmin(player)) -- клиент показывает панель, но права всё равно проверяет сервер
 	-- Пока игрока не было, рыбы приносили часть дохода
 	local now = os.time()
-	local gained = Economy.applyOffline(profile, now)
+	refreshPasses(player)
+	local gained = Economy.applyOffline(profile, now, incomeMultiplier(player))
 	profile.lastSeen = now
 	if gained > 0 then
 		pendingOffline[player] = gained
@@ -203,6 +233,7 @@ local function onPlayerRemoving(player)
 	buckets[player] = nil
 	pendingOffline[player] = nil
 	funnelSent[player] = nil
+	hasDoubleCoins[player] = nil
 	PlayerData.release(player) -- финальное сохранение и снятие блокировки
 end
 
@@ -490,6 +521,37 @@ adminCommandEvent.OnServerEvent:Connect(function(player, cmd, value, extra)
 	pushState(player)
 end)
 
+-- ===== Обработка покупок за Robux =====
+MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passId, wasPurchased)
+	if wasPurchased and passId == FishConfig.Shop.DoubleCoins.passId and passId ~= 0 then
+		hasDoubleCoins[player] = true
+		sendShopState(player)
+	end
+end)
+
+-- Товары «монеты»: выдаём по чеку один раз. Пока профиль не загружен, чек не подтверждаем (Roblox повторит позже).
+MarketplaceService.ProcessReceipt = function(receiptInfo)
+	local player = Players:GetPlayerByUserId(receiptInfo.PlayerId)
+	if player == nil then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	local profile = PlayerData.get(player)
+	if profile == nil then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	local result = Shop.grant(profile, receiptInfo.ProductId, tostring(receiptInfo.PurchaseId), os.time())
+	if result == "unknown" then
+		warn("[Shop] неизвестный товар", receiptInfo.ProductId)
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	if result == "granted" then
+		-- Сразу сохраняем: деньги за Robux не должны потеряться при сбое сервера
+		task.spawn(PlayerData.save, player)
+		sendCoins(player, profile)
+	end
+	return Enum.ProductPurchaseDecision.PurchaseGranted
+end
+
 -- ===== Пассивный доход =====
 -- Каждая рыба приносит монеты; плюсуем и к статистике рыбы, и к статистике вида
 task.spawn(function()
@@ -498,7 +560,7 @@ task.spawn(function()
 		for _, player in ipairs(Players:GetPlayers()) do
 			local profile = PlayerData.get(player)
 			if profile ~= nil and Economy.fishCount(profile) > 0 then
-				Economy.applyIncome(profile, 1, os.time())
+				Economy.applyIncome(profile, 1, os.time(), incomeMultiplier(player))
 				if ready[player] then
 					sendCoins(player, profile)
 					sendFish(player, profile)

@@ -18,8 +18,9 @@ SPRITES = [
     "guppy", "clown", "puffer", "whale", "octopus",
     "ember_shrimp", "magma_crab", "fire_eel", "caldera_squid", "magma_dragon",
     "penguin", "seal", "polar_shark", "beluga", "narwhal",
+    "lantern_fish", "jellyfish", "anglerfish", "abyss_ray", "leviathan",
 ]
-BACKGROUNDS = ["bg_lagoon", "bg_volcano", "bg_arctic"]
+BACKGROUNDS = ["bg_lagoon", "bg_volcano", "bg_arctic", "bg_abyss"]
 
 
 def encode(name):

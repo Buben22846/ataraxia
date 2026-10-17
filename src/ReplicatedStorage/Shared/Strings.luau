@@ -62,11 +62,17 @@ local EN_SPECIES = {
 	polar_shark = "Polar Shark",
 	beluga = "Beluga",
 	narwhal = "Narwhal",
+	lantern_fish = "Lanternfish",
+	jellyfish = "Jellyfish",
+	anglerfish = "Anglerfish",
+	abyss_ray = "Abyssal Ray",
+	leviathan = "Leviathan",
 }
 local EN_TANKS = {
 	lagoon = "Quiet Lagoon",
 	volcano = "Volcanic Reef",
 	arctic = "Frozen Grotto",
+	abyss = "The Abyss",
 }
 local EN_RARITIES = {
 	common = "Common",
@@ -83,6 +89,7 @@ local EN_PACKS = {
 	lagoon = "Lagoon Pack",
 	volcano = "Volcano Pack",
 	arctic = "Ice Pack",
+	abyss = "Abyss Pack",
 }
 local EN_STAGES = { "Fry", "Juvenile", "Adult" } -- по индексу FishConfig.GrowthStages
 

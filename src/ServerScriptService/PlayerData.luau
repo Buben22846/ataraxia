@@ -79,6 +79,7 @@ local function newProfile()
 		lastSeen = os.time(), -- время последнего сохранения (для дохода в офлайне)
 		daily = { lastDay = 0, streak = 0 }, -- ежедневная награда: номер последнего дня (UTC) и серия дней подряд
 		tutorialDone = false, -- прошёл ли игрок обучение
+		receipts = { list = {}, seen = {} }, -- чеки покупок за Robux (чтобы не выдать товар дважды)
 	}
 end
 
