@@ -81,7 +81,7 @@ return function()
 		},
 	}
 	local p7 = M._claim(1004)
-	check("миграция v1 -> v4: появились аквариум, места и lastSeen", p7 ~= nil and p7.version == 4 and p7.tanks.lagoon.slots == FishConfig.START_SLOTS and type(p7.lastSeen) == "number")
+	check("миграция v1 -> v5: появились аквариум, места и lastSeen", p7 ~= nil and p7.version == 5 and p7.tanks.lagoon.slots == FishConfig.START_SLOTS and type(p7.lastSeen) == "number")
 	check("миграция v1 -> v2: старые данные целы", p7 ~= nil and p7.coins == 321 and #p7.tanks.lagoon.fish == 1 and p7.speciesStats.guppy.pulled == 2)
 
 	data["Player_1005"] = { data = { version = 1, coins = 5 } }
@@ -94,7 +94,7 @@ return function()
 
 	data["Player_1006"] = { data = { version = 2, coins = 5, slots = 6, nextFishId = 1, fish = {}, discovered = {}, speciesStats = {} } }
 	local p9 = M._claim(1006)
-	check("миграция v2 -> v4: lastSeen появился, данные целы", p9 ~= nil and p9.version == 4 and type(p9.lastSeen) == "number" and p9.tanks.lagoon.slots == 6 and p9.coins == 5)
+	check("миграция v2 -> v5: lastSeen появился, данные целы", p9 ~= nil and p9.version == 5 and type(p9.lastSeen) == "number" and p9.tanks.lagoon.slots == 6 and p9.coins == 5)
 
 	-- ===== Рост, варианты, доход =====
 	check(
@@ -175,8 +175,8 @@ return function()
 	}
 	local p10 = M._claim(1007)
 	check(
-		"миграция v3 -> v4: рыбы и места переехали в лагуну",
-		p10 ~= nil and p10.version == 4 and p10.tanks.lagoon.slots == 7 and #p10.tanks.lagoon.fish == 1 and p10.slots == nil and p10.fish == nil
+		"миграция v3 -> v5: рыбы и места переехали в лагуну",
+		p10 ~= nil and p10.version == 5 and p10.tanks.lagoon.slots == 7 and #p10.tanks.lagoon.fish == 1 and p10.slots == nil and p10.fish == nil
 	)
 
 	local tanksOk = true
@@ -237,6 +237,26 @@ return function()
 			check(string.format("пак %s: %s %.2f%% ≈ %g%%", packId, rarity, actual, expected), math.abs(actual - expected) < 0.5)
 		end
 	end
+
+	-- ===== Ежедневная награда =====
+	local DailyReward = require(ServerScriptService.DailyReward)
+	local day = 20000
+	local t0 = day * 86400 + 100
+	local dp = { coins = 0, daily = { lastDay = 0, streak = 0 } }
+	local st = DailyReward.state(dp, t0)
+	check("награда: новому игроку можно забрать, серия 1", st.canClaim and st.streak == 1 and st.reward == FishConfig.DailyRewards[1])
+	local got, streak = DailyReward.claim(dp, t0)
+	check("награда: первая выдана, монеты зачислены", got == FishConfig.DailyRewards[1] and streak == 1 and dp.coins == got)
+	local again = DailyReward.claim(dp, t0 + 3600)
+	check("награда: второй раз в тот же день не выдаётся", again == nil and dp.coins == got)
+	check("награда: после получения canClaim=false и таймер идёт", DailyReward.state(dp, t0).canClaim == false and DailyReward.state(dp, t0).secondsLeft == 86400 - 100)
+	local got2, streak2 = DailyReward.claim(dp, t0 + 86400)
+	check("награда: на следующий день серия растёт", streak2 == 2 and got2 == FishConfig.DailyRewards[2])
+	local _, streak3 = DailyReward.claim(dp, t0 + 4 * 86400)
+	check("награда: пропуск дня сбрасывает серию", streak3 == 1)
+	local rp = { coins = 0, daily = { lastDay = day - 1, streak = 7 } }
+	local got8, streak8 = DailyReward.claim(rp, t0)
+	check("награда: после 7-го дня круг начинается заново", streak8 == 8 and got8 == FishConfig.DailyRewards[1])
 
 	-- ===== Конфиг =====
 	for packId, pack in pairs(FishConfig.Packs) do

@@ -52,6 +52,15 @@
         },
         "SellFish": {
           "$className": "RemoteEvent"
+        },
+        "ClaimDaily": {
+          "$className": "RemoteEvent"
+        },
+        "DailyState": {
+          "$className": "RemoteEvent"
+        },
+        "TutorialDone": {
+          "$className": "RemoteEvent"
         }
       }
     },
@@ -69,6 +78,9 @@
       },
       "PackRoller": {
         "$path": "src/ServerScriptService/PackRoller.luau"
+      },
+      "DailyReward": {
+        "$path": "src/ServerScriptService/DailyReward.luau"
       }
     },
     "ServerStorage": {

@@ -10,6 +10,8 @@ local FishConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild
 local PackRoller = require(ServerScriptService:WaitForChild("PackRoller"))
 local PlayerData = require(ServerScriptService:WaitForChild("PlayerData"))
 local Economy = require(ServerScriptService:WaitForChild("Economy"))
+local DailyReward = require(ServerScriptService:WaitForChild("DailyReward"))
+local AnalyticsService = game:GetService("AnalyticsService")
 
 -- ===== НАСТРОЙКИ =====
 -- Аквариумы игрока лежат в профиле (profile.tanks[id] = { slots, fish }), максимум мест и цены — в FishConfig.
@@ -27,6 +29,29 @@ local buySlotEvent = remotes:WaitForChild("BuySlot")
 local adminCommandEvent = remotes:WaitForChild("AdminCommand")
 local offlineIncomeEvent = remotes:WaitForChild("OfflineIncome")
 local buyTankEvent = remotes:WaitForChild("BuyTank")
+local claimDailyEvent = remotes:WaitForChild("ClaimDaily")
+local dailyStateEvent = remotes:WaitForChild("DailyState")
+local tutorialDoneEvent = remotes:WaitForChild("TutorialDone")
+
+-- ===== Аналитика: воронка «где игроки бросают игру» (шаги видны в Creator Hub -> Analytics) =====
+-- 1 зашёл, 2 открыл первый пак, 3 прошёл обучение, 4 забрал ежедневную награду, 5 купил второй аквариум.
+local FUNNEL_STEPS = { "joined", "first_pack", "tutorial_done", "daily_claimed", "second_tank" }
+local funnelSent = {} -- [player] = { [step] = true }, чтобы каждый шаг слать один раз за сессию
+local function trackStep(player, step)
+	local sent = funnelSent[player]
+	if sent == nil then
+		sent = {}
+		funnelSent[player] = sent
+	end
+	if sent[step] then
+		return
+	end
+	sent[step] = true
+	-- Аналитика не должна ломать игру: любые ошибки гасим
+	pcall(function()
+		AnalyticsService:LogOnboardingFunnelStepEvent(player, step, FUNNEL_STEPS[step])
+	end)
+end
 
 local loaded = {} -- player -> true, когда профиль загружен
 
@@ -135,6 +160,9 @@ local function pushState(player)
 	sendFish(player, profile)
 	sendCollection(player, profile)
 
+	dailyStateEvent:FireClient(player, DailyReward.state(profile, os.time()))
+	tutorialDoneEvent:FireClient(player, profile.tutorialDone)
+
 	local gained = pendingOffline[player]
 	if gained then
 		pendingOffline[player] = nil
@@ -148,9 +176,9 @@ local function onPlayerAdded(player)
 	if profile == nil then
 		-- Не даём играть с пустым профилем: его сохранение перезапишет настоящий
 		if reason == "locked" then
-			player:Kick("Ваши данные ещё сохраняются на другом сервере. Зайдите снова через минуту.")
+			player:Kick("Your data is still saving on another server. Please rejoin in a minute. / Ваши данные ещё сохраняются на другом сервере. Зайдите снова через минуту.")
 		elseif reason ~= "left" then
-			player:Kick("Не удалось загрузить данные. Прогресс не потерян, зайдите снова.")
+			player:Kick("Could not load your data. Your progress is safe, please rejoin. / Не удалось загрузить данные. Прогресс не потерян, зайдите снова.")
 		end
 		return
 	end
@@ -163,6 +191,7 @@ local function onPlayerAdded(player)
 		pendingOffline[player] = gained
 	end
 	loaded[player] = true
+	trackStep(player, 1)
 	if ready[player] then
 		pushState(player)
 	end
@@ -173,6 +202,7 @@ local function onPlayerRemoving(player)
 	ready[player] = nil
 	buckets[player] = nil
 	pendingOffline[player] = nil
+	funnelSent[player] = nil
 	PlayerData.release(player) -- финальное сохранение и снятие блокировки
 end
 
@@ -238,7 +268,40 @@ openPackEvent.OnServerEvent:Connect(function(player, packId)
 	sendCoins(player, profile)
 	sendFish(player, profile)
 	sendCollection(player, profile)
+	trackStep(player, 2)
 	packResultEvent:FireClient(player, { ok = true, species = speciesId, rarity = rarity, variant = variant, isNew = isNew })
+end)
+
+-- ===== Ежедневная награда =====
+-- Клиент присылает только намерение «забрать»: день, серию и сумму считает сервер.
+claimDailyEvent.OnServerEvent:Connect(function(player)
+	if not allow(player, "ClaimDaily", 1, 2) then
+		return
+	end
+	local profile = PlayerData.get(player)
+	if profile == nil then
+		return
+	end
+	local reward = DailyReward.claim(profile, os.time())
+	if reward == nil then
+		return
+	end
+	trackStep(player, 4)
+	sendCoins(player, profile)
+	dailyStateEvent:FireClient(player, DailyReward.state(profile, os.time()))
+end)
+
+-- ===== Обучение пройдено (клиент сообщает один раз; на экономику это не влияет) =====
+tutorialDoneEvent.OnServerEvent:Connect(function(player)
+	if not allow(player, "TutorialDone", 1, 2) then
+		return
+	end
+	local profile = PlayerData.get(player)
+	if profile == nil or profile.tutorialDone then
+		return
+	end
+	profile.tutorialDone = true
+	trackStep(player, 3)
 end)
 
 -- ===== Покупка места в аквариуме =====
@@ -299,6 +362,7 @@ buyTankEvent.OnServerEvent:Connect(function(player, tankId)
 	profile.coins -= def.price
 	profile.tanks[tankId] = FishConfig.newTank()
 	print(player.Name, "открыл аквариум", tankId, "монет:", profile.coins)
+	trackStep(player, 5)
 	sendCoins(player, profile)
 	sendFish(player, profile)
 end)

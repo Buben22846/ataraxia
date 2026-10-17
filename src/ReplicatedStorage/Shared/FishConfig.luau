@@ -55,7 +55,7 @@ FishConfig.SpeciesOrder = {
 FishConfig.Tanks = {
 	lagoon = { name = "Тихая лагуна", emoji = "🌊", price = 0, pack = "lagoon", slotPriceMult = 1, color = Color3.fromRGB(20, 110, 140), background = "bg_lagoon" },
 	volcano = { name = "Вулканический риф", emoji = "🌋", price = 5000, pack = "volcano", slotPriceMult = 4, color = Color3.fromRGB(105, 36, 28), background = "bg_volcano" },
-	arctic = { name = "Ледяной грот", emoji = "❄️", price = 40000, pack = "arctic", slotPriceMult = 10, color = Color3.fromRGB(64, 120, 165), background = "bg_arctic" },
+	arctic = { name = "Ледяной грот", emoji = "❄️", price = 150000, pack = "arctic", slotPriceMult = 10, color = Color3.fromRGB(64, 120, 165), background = "bg_arctic" },
 }
 FishConfig.TankOrder = { "lagoon", "volcano", "arctic" }
 
@@ -128,6 +128,15 @@ FishConfig.Variants = {
 	rainbow = { name = "Радужная", mult = 5, weight = 1, emoji = "🌈", color = Color3.fromRGB(240, 98, 146) },
 }
 FishConfig.VariantOrder = { "normal", "golden", "rainbow" }
+
+-- ===== Ежедневная награда =====
+-- Заходишь каждый день подряд — награда растёт (7 дней по кругу). Пропустил день — серия начинается заново.
+FishConfig.DailyRewards = { 100, 200, 350, 600, 1000, 1800, 4000 }
+
+-- Номер дня (UTC) для момента времени в секундах
+function FishConfig.dayOf(t)
+	return math.floor(t / 86400)
+end
 
 -- ===== Доход в офлайне =====
 -- Пока игрока нет, рыбы приносят OFFLINE_RATE от обычного дохода, но не дольше OFFLINE_MAX секунд.

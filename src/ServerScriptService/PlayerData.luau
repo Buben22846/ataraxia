@@ -13,7 +13,7 @@ local FishConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild
 -- ===== НАСТРОЙКИ =====
 -- Studio пишет в отдельное хранилище и никогда не трогает сохранения реальных игроков
 local STORE_NAME = if RunService:IsStudio() then "PlayerData_Studio_v1" else "PlayerData_v1"
-local CURRENT_VERSION = 4
+local CURRENT_VERSION = 5
 local START_COINS = 100 -- стартовые монеты нового игрока
 local AUTOSAVE_INTERVAL = 60 -- секунд между автосохранениями
 local LOCK_TIMEOUT = 150 -- блокировка старше этого считается «мёртвой» (сервер упал)
@@ -77,6 +77,8 @@ local function newProfile()
 		discovered = {}, -- { [speciesId] = true }
 		speciesStats = {}, -- { [speciesId] = { pulled = сколько раз выпала, earned = всего заработано видом } }
 		lastSeen = os.time(), -- время последнего сохранения (для дохода в офлайне)
+		daily = { lastDay = 0, streak = 0 }, -- ежедневная награда: номер последнего дня (UTC) и серия дней подряд
+		tutorialDone = false, -- прошёл ли игрок обучение
 	}
 end
 
@@ -97,6 +99,12 @@ local MIGRATIONS = {
 		data.tanks = { lagoon = { slots = data.slots or FishConfig.START_SLOTS, fish = data.fish or {} } }
 		data.slots = nil
 		data.fish = nil
+		return data
+	end,
+	-- v4 -> v5: ежедневная награда и флаг обучения; тот, кто уже играл, обучение не видит.
+	[4] = function(data)
+		data.daily = { lastDay = 0, streak = 0 }
+		data.tutorialDone = true
 		return data
 	end,
 }
