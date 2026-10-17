@@ -219,9 +219,32 @@ function UIKit.button(button)
 end
 
 -- Подпись (монеты, число рыб): тёмная плитка без нажатия
-function UIKit.label(label)
-	local look = { up = "ui_btn_dark", down = "ui_btn_dark" }
+-- textScale (необязательно) — доля ширины под текст, если слева или справа нужно место под иконку
+function UIKit.label(label, textScale)
+	local look = { up = "ui_btn_dark", down = "ui_btn_dark", textScale = textScale }
 	return skinText(label, look)
+end
+
+-- Иконка внутри элемента слева (монета и т.п.). Рисуется поверх скина и текста. Возвращает ImageLabel или nil, если картинки нет.
+function UIKit.icon(parent, id, offsetX)
+	local icon = Instance.new("ImageLabel")
+	icon.Name = "Icon_" .. id
+	icon.BackgroundTransparency = 1
+	icon.AnchorPoint = Vector2.new(0, 0.5)
+	icon.Position = UDim2.fromScale(offsetX or 0.04, 0.5)
+	icon.SizeConstraint = Enum.SizeConstraint.RelativeYY -- и ширина, и высота считаются от высоты: иконка квадратная
+	icon.Size = UDim2.fromScale(0.62, 0.62)
+	icon.ZIndex = parent.ZIndex + 3
+	icon.Active = false
+	if not Sprites.apply(icon, id, false) then
+		icon:Destroy()
+		return nil
+	end
+	icon.Parent = parent
+	parent:GetPropertyChangedSignal("ZIndex"):Connect(function()
+		icon.ZIndex = parent.ZIndex + 3
+	end)
+	return icon
 end
 
 -- Цирковой билет: красная кнопка-приманка. Нажимается как обычная кнопка (Activated), текст читается из button.Text.

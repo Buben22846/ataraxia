@@ -339,7 +339,8 @@ coinsLabel.Size = UDim2.fromScale(0.34, TOP_H)
 coinsLabel.Text = T("coins", 0)
 make("UITextSizeConstraint", { MinTextSize = 12, MaxTextSize = 28 }, coinsLabel)
 make("UICorner", { CornerRadius = UDim.new(0.25, 0) }, coinsLabel)
-UIKit.label(coinsLabel)
+UIKit.label(coinsLabel, 0.72) -- справа от иконки монеты
+UIKit.icon(coinsLabel, "ui_coin", 0.05)
 
 local fishCountLabel = make("TextLabel", {
 	Name = "FishCountLabel",
@@ -668,7 +669,7 @@ local function refreshCollection()
 				collectionPanel.list,
 				index,
 				species.emoji .. " " .. Strings.species(id) .. " ×" .. tostring(entry.pulled),
-				"💰 " .. tostring(entry.earned),
+				"💰 " .. Strings.num(entry.earned),
 				rarity.color
 			)
 		else

@@ -156,7 +156,7 @@ end
 local TEXT = {
 	ru = {
 		-- Главный экран
-		coins = "Монеты: %s",
+		coins = "%s",
 		buy_pack = "%s (%s)",
 		odds = "Шансы",
 		collection = "Коллекция %s/%s",
@@ -187,19 +187,19 @@ local TEXT = {
 		age_ms = "%sм %sс",
 		age_hm = "%sч %sм",
 		sell = "%s: продать (+%s)",
-		museum_btn = "🎟 %d",
-		museum_title = "Музей · ранг %d · 🎟 %d",
+		museum_btn = "🎟 %s",
+		museum_title = "Музей · ранг %d · 🎟 %s",
 		museum_hint = "Рыба остаётся у вас. Гость, которого не дождались, просто сменится новым",
 		museum_rank_next = "Ранг %d. До следующего: %d заказов",
 		museum_rank_max = "Высший ранг музея",
 		order_show = "Показать",
 		order_nofish = "Нет рыбы",
-		order_line2 = "%s%s · 🎟 %d · %s",
+		order_line2 = "%s%s · 🎟 %s · %s",
 		order_waiting = "Скоро придёт новый гость · %s",
-		museum_shop_pack = "Пак редких рыб · 🎟 %d",
-		museum_shop_slot = "Место сверх лимита · 🎟 %d",
+		museum_shop_pack = "Пак редких рыб · 🎟 %s",
+		museum_shop_slot = "Место сверх лимита · 🎟 %s",
 		museum_shop_locked = "Сначала купите все места за монеты",
-		toast_ticket = "+%d 🎟 за показ рыбы",
+		toast_ticket = "+%s 🎟 за показ рыбы",
 		toast_rankup = "Новый ранг музея: %d!",
 		toast_tickets_need = "Не хватает билетов",
 		toast_slot_limit = "Дополнительные места недоступны",
@@ -274,7 +274,7 @@ local TEXT = {
 	},
 
 	en = {
-		coins = "Coins: %s",
+		coins = "%s",
 		buy_pack = "%s (%s)",
 		odds = "Odds",
 		collection = "Collection %s/%s",
@@ -301,19 +301,19 @@ local TEXT = {
 		age_ms = "%sm %ss",
 		age_hm = "%sh %sm",
 		sell = "Sell %s (+%s)",
-		museum_btn = "🎟 %d",
-		museum_title = "Museum · rank %d · 🎟 %d",
+		museum_btn = "🎟 %s",
+		museum_title = "Museum · rank %d · 🎟 %s",
 		museum_hint = "You keep the fish. A guest you didn't wait for is simply replaced by another",
 		museum_rank_next = "Rank %d. %d more orders to the next",
 		museum_rank_max = "Top museum rank",
 		order_show = "Show",
 		order_nofish = "No fish",
-		order_line2 = "%s%s · 🎟 %d · %s",
+		order_line2 = "%s%s · 🎟 %s · %s",
 		order_waiting = "A new guest arrives soon · %s",
-		museum_shop_pack = "Rare fish pack · 🎟 %d",
-		museum_shop_slot = "Extra slot · 🎟 %d",
+		museum_shop_pack = "Rare fish pack · 🎟 %s",
+		museum_shop_slot = "Extra slot · 🎟 %s",
 		museum_shop_locked = "Buy all coin slots first",
-		toast_ticket = "+%d 🎟 for showing a fish",
+		toast_ticket = "+%s 🎟 for showing a fish",
 		toast_rankup = "New museum rank: %d!",
 		toast_tickets_need = "Not enough tickets",
 		toast_slot_limit = "Extra slots are unavailable",
@@ -382,16 +382,55 @@ local TEXT = {
 	},
 }
 
--- Текст по ключу; если переданы аргументы — подставляет их через string.format
+-- Короткая запись больших чисел: 999 -> "999", 1000 -> "1K", 1500 -> "1.5K", 17187818 -> "17.18M".
+-- Суффиксы: K тысяча, M миллион, B миллиард, T триллион, Qa, Qi, Sx. Дробную часть отбрасываем (не округляем),
+-- поэтому «1000K» никогда не появляется.
+local SUFFIXES = { "K", "M", "B", "T", "Qa", "Qi", "Sx" }
+
+function Strings.num(n)
+	local sign = if n < 0 then "-" else ""
+	local value = math.abs(n)
+	if value < 1000 then
+		return sign .. tostring(math.floor(value))
+	end
+	local index = 0
+	while value >= 1000 and index < #SUFFIXES do
+		value /= 1000
+		index += 1
+	end
+	local text
+	if value >= 100 then
+		text = tostring(math.floor(value))
+	else
+		local decimals = if value >= 10 then 10 else 100
+		text = string.format("%.2f", math.floor(value * decimals) / decimals)
+		if decimals == 10 then
+			text = string.format("%.1f", math.floor(value * 10) / 10)
+		end
+		text = text:gsub("%.?0+$", "") -- 1.50 -> 1.5, 2.00 -> 2
+	end
+	return sign .. text .. SUFFIXES[index]
+end
+
+-- Текст по ключу; если переданы аргументы — подставляет их через string.format.
+-- Числа от 1000 и больше записываются кратко (1.5K, 2M), поэтому в таких местах нужен %s, а не %d.
 function Strings.t(key, ...)
 	local text = TEXT[language][key] or TEXT.en[key] or TEXT.ru[key]
 	if text == nil then
 		return tostring(key)
 	end
-	if select("#", ...) == 0 then
+	local count = select("#", ...)
+	if count == 0 then
 		return text
 	end
-	local ok, result = pcall(string.format, text, ...)
+	local args = table.pack(...)
+	for i = 1, count do
+		local value = args[i]
+		if type(value) == "number" and math.abs(value) >= 1000 then
+			args[i] = Strings.num(value)
+		end
+	end
+	local ok, result = pcall(string.format, text, table.unpack(args, 1, count))
 	return if ok then result else text
 end
 
