@@ -4,9 +4,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from pixel import Grid, save_sprite
 
 OUT = "#1d2b3a"
-LIGHT = "#5f88d2"
-BASE = "#34509a"
-SHADE = "#222f6a"
+LIGHT = "#6f9be6"
+BASE = "#3b5aaa"
+SHADE = "#26397c"
 TURQ = "#2cf0dc"
 TURQ2 = "#c4fff7"
 WHITE = "#ffffff"
@@ -38,11 +38,11 @@ for y in range(g.h):
 # светлые точки на кончиках
 g.set(10, 3, TURQ2); g.set(11, 3, TURQ2); g.set(10, 29, TURQ2); g.set(11, 29, TURQ2)
 # хвост-плеть (после неона, чтобы не обводился бирюзой)
-tail = [(8, 16), (6, 17), (4, 17), (3, 18), (2, 20), (1, 21), (0, 21)]
+tail = [(8, 16), (6, 17), (4, 17), (3, 18), (2, 20), (2, 21)]
 for (x0, y0), (x1, y1) in zip(tail, tail[1:]):
     g.line(x0, y0, x1, y1, SHADE)
 g.set(7, 16, SHADE); g.set(7, 17, SHADE)
-g.set(0, 21, TURQ2); g.set(1, 21, TURQ)
+g.set(2, 21, TURQ2); g.set(2, 22, TURQ)
 # светящиеся пятна на спине
 for x in (14, 17, 20):
     g.set(x, 16, TURQ)
