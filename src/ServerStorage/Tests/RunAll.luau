@@ -280,6 +280,85 @@ return function()
 		check("товар " .. product.key .. " находится по своему id", product.productId == 0 or Shop.productById(product.productId) == product)
 	end
 
+	-- ===== Слияние и наборы коллекции =====
+	local Merge = require(ServerScriptService.Merge)
+	local Collection = require(ServerScriptService.Collection)
+	local function fishOf(id, species, variant, born)
+		return { id = id, species = species, variant = variant, born = born or 0, earned = 0 }
+	end
+	local function mergeProfile(fish)
+		return { coins = 0, nextFishId = 100, tanks = { lagoon = { slots = 10, fish = fish }, volcano = FishConfig.newTank() }, discovered = {}, seen = {}, speciesStats = {} }
+	end
+	local mp1 = mergeProfile({
+		fishOf(1, "guppy", "normal", 0), fishOf(2, "guppy", "normal", 10), fishOf(3, "guppy", "normal", 20),
+		fishOf(4, "guppy", "normal", 30), fishOf(5, "guppy", "normal", 40), fishOf(6, "guppy", "normal", 50),
+		fishOf(7, "clown", "normal", 0),
+	})
+	local okM, newM, isNewM = Merge.perform(mp1, 1, 1000)
+	check("слияние: 6 одинаковых -> золотая", okM == true and newM.variant == "golden" and newM.species == "guppy" and newM.born == 1000)
+	check("слияние: съедено 5, осталась 1 обычная + клоун + новая", #mp1.tanks.lagoon.fish == 3 and newM.id == 100 and mp1.nextFishId == 101)
+	check("слияние: уходят выбранная и 4 самые молодые, вторая по возрасту остаётся", (function()
+		local left = {}
+		for _, f in ipairs(mp1.tanks.lagoon.fish) do
+			left[f.id] = true
+		end
+		return left[2] == true and not left[1] and not left[3] and not left[4] and not left[5] and not left[6]
+	end)())
+	check("слияние: первый золотой вид отмечен как новый", isNewM == true and mp1.seen["guppy/golden"] == true)
+	local okFew, reasonFew = Merge.perform(mp1, 7, 1000)
+	check("слияние: одной рыбы мало", okFew == false and reasonFew == "count")
+	local okMissing, reasonMissing = Merge.perform(mp1, 9999, 1000)
+	check("слияние: чужой/несуществующий id отклоняется", okMissing == false and reasonMissing == "missing")
+	local mp2 = mergeProfile({ fishOf(1, "guppy", "normal"), fishOf(2, "guppy", "normal"), fishOf(3, "guppy", "normal"), fishOf(4, "guppy", "normal") })
+	local okFour = Merge.perform(mp2, 1, 1000)
+	check("слияние: 4 рыб недостаточно, ничего не потеряно", okFour == false and #mp2.tanks.lagoon.fish == 4)
+	local mp3 = mergeProfile({})
+	for id = 1, 5 do
+		table.insert(mp3.tanks.lagoon.fish, fishOf(id, "puffer", "golden"))
+	end
+	local okR, newR = Merge.perform(mp3, 3, 1000)
+	check("слияние: 5 золотых -> радужная", okR == true and newR.variant == "rainbow" and #mp3.tanks.lagoon.fish == 1)
+	local mp4 = mergeProfile({})
+	for id = 1, 5 do
+		table.insert(mp4.tanks.lagoon.fish, fishOf(id, "puffer", "rainbow"))
+	end
+	local okMax, reasonMax = Merge.perform(mp4, 1, 1000)
+	check("слияние: радужные выше не сливаются", okMax == false and reasonMax == "max" and #mp4.tanks.lagoon.fish == 5)
+	local mp5 = mergeProfile({ fishOf(1, "guppy", "normal"), fishOf(2, "guppy", "normal"), fishOf(3, "guppy", "normal"), fishOf(4, "guppy", "normal") })
+	table.insert(mp5.tanks.volcano.fish, fishOf(5, "guppy", "normal"))
+	check("слияние: рыбы из разных аквариумов не смешиваются", Merge.perform(mp5, 1, 1000) == false)
+	check("у старого варианта без поля variant — обычная", FishConfig.nextVariant(nil) == "golden" and FishConfig.nextVariant("rainbow") == nil)
+
+	local lagoonSpecies = FishConfig.speciesOfTank("lagoon")
+	local cp = { coins = 0, tanks = { lagoon = FishConfig.newTank() }, discovered = {}, seen = {}, speciesStats = {} }
+	check("набор: пустая коллекция без бонуса", Collection.bonus(cp, "lagoon") == 0)
+	for index, id in ipairs(lagoonSpecies) do
+		cp.discovered[id] = true
+		if index == #lagoonSpecies then
+			check("набор: 4 из 5 видов бонуса не дают", Collection.bonus(cp, "lagoon") == 0)
+		end
+	end
+	check("набор: все виды лагуны дают +10%", math.abs(Collection.bonus(cp, "lagoon") - 0.10) < 1e-9)
+	check("набор: бонус лагуны не действует на вулкан", Collection.bonus(cp, "volcano") == 0)
+	for _, id in ipairs(lagoonSpecies) do
+		Collection.mark(cp, id, "golden")
+	end
+	check("набор: все золотые добавляют +25%", math.abs(Collection.bonus(cp, "lagoon") - 0.35) < 1e-9)
+	for _, id in ipairs(lagoonSpecies) do
+		Collection.mark(cp, id, "rainbow")
+	end
+	check("набор: все радужные — итого +85%", math.abs(Collection.bonus(cp, "lagoon") - 0.85) < 1e-9)
+	local summary = Collection.summary(cp)
+	check("набор: сводка по ступеням", summary.lagoon.tiers[1].done and summary.lagoon.tiers[3].have == #lagoonSpecies and summary.volcano.bonus == 0)
+	local ip = { coins = 0, tanks = { lagoon = { slots = 5, fish = { fishOf(1, "octopus", "normal", 0) } } }, discovered = {}, seen = {}, speciesStats = {} }
+	local noBonus = Economy.applyIncome(ip, 1, 0)
+	ip.discovered = cp.discovered
+	local withBonus = Economy.applyIncome(ip, 1, 0)
+	check("бонус набора: осьминог 25 -> 28 (+10%, округление), без набора 25", noBonus == 25 and withBonus == 28)
+	local sp3 = { coins = 0, tanks = { lagoon = { slots = 5, fish = { fishOf(1, "guppy", "golden", 0), fishOf(2, "clown", "normal", 0) } } }, discovered = {}, seen = {}, speciesStats = {} }
+	Collection.sync(sp3)
+	check("синхронизация записывает рыб в память", sp3.seen["guppy/golden"] == true and sp3.seen["clown/normal"] == true)
+
 	-- ===== Конфиг =====
 	for packId, pack in pairs(FishConfig.Packs) do
 		local sum = 0

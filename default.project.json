@@ -76,6 +76,12 @@
         },
         "Settings": {
           "$className": "RemoteEvent"
+        },
+        "MergeFish": {
+          "$className": "RemoteEvent"
+        },
+        "SetsChanged": {
+          "$className": "RemoteEvent"
         }
       }
     },
@@ -99,6 +105,12 @@
       },
       "Shop": {
         "$path": "src/ServerScriptService/Shop.luau"
+      },
+      "Collection": {
+        "$path": "src/ServerScriptService/Collection.luau"
+      },
+      "Merge": {
+        "$path": "src/ServerScriptService/Merge.luau"
       }
     },
     "ServerStorage": {

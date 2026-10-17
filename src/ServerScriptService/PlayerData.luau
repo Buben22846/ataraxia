@@ -75,6 +75,7 @@ local function newProfile()
 		-- У рыбы: born — время покупки (сек), earned — сколько заработала эта рыба.
 		tanks = { lagoon = FishConfig.newTank() },
 		discovered = {}, -- { [speciesId] = true }
+		seen = {}, -- { ["вид/цвет"] = true }: какие сочетания вида и цвета у игрока когда-либо были (наборы коллекции)
 		speciesStats = {}, -- { [speciesId] = { pulled = сколько раз выпала, earned = всего заработано видом } }
 		lastSeen = os.time(), -- время последнего сохранения (для дохода в офлайне)
 		daily = { lastDay = 0, streak = 0 }, -- ежедневная награда: номер последнего дня (UTC) и серия дней подряд

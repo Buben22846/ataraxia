@@ -187,6 +187,11 @@ local TEXT = {
 		age_ms = "%sм %sс",
 		age_hm = "%sч %sм",
 		sell = "%s: продать (+%s)",
+		merge = "Слить %d → %s",
+		merge_progress = "Слияние: %d из %d",
+		toast_merge_fail = "Нужно 5 одинаковых рыб одного цвета в этом аквариуме",
+		set_row = "Набор %s ✨%s 🌈%s",
+		set_bonus = "+%d%% дохода",
 
 		-- Аквариумы
 		tanks_title = "Аквариумы",
@@ -279,6 +284,11 @@ local TEXT = {
 		age_ms = "%sm %ss",
 		age_hm = "%sh %sm",
 		sell = "Sell %s (+%s)",
+		merge = "Merge %d -> %s",
+		merge_progress = "Merge: %d of %d",
+		toast_merge_fail = "You need 5 identical fish of the same color in this tank",
+		set_row = "Set %s ✨%s 🌈%s",
+		set_bonus = "+%d%% income",
 
 		tanks_title = "Tanks",
 		tanks_hint = "Each tank has its own fish and pack · income comes from all tanks at once",

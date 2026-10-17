@@ -305,6 +305,7 @@ local function currentPack()
 end
 local totalSpecies = #FishConfig.SpeciesOrder
 local discovered = {} -- id вида -> true (собранные виды, присылает сервер)
+local setsState = {} -- наборы коллекции от сервера: { [tankId] = { bonus, tiers = { {have, need, done, bonus}, ... } } }
 local revealBusy = false -- идёт анимация открытия пака
 local pendingReveals = {} -- очередь результатов, если они пришли во время анимации
 
@@ -674,6 +675,22 @@ local function refreshCollection()
 			addRow(collectionPanel.list, index, T("unknown_fish"), "—", COLOR_MUTED)
 		end
 	end
+
+	-- Итоговая строка: прогресс набора (все виды / золотые / радужные) и прибавка к доходу этого аквариума
+	local sets = setsState[currentTank]
+	if sets ~= nil and sets.tiers ~= nil then
+		local function part(tier)
+			return if tier == nil then "?" else (tostring(tier.have) .. "/" .. tostring(tier.need))
+		end
+		local bonusPercent = math.floor((sets.bonus or 0) * 100 + 0.5)
+		addRow(
+			collectionPanel.list,
+			99,
+			T("set_row", part(sets.tiers[1]), part(sets.tiers[2]), part(sets.tiers[3])),
+			T("set_bonus", bonusPercent),
+			if bonusPercent > 0 then COLOR_GOLD else COLOR_MUTED
+		)
+	end
 end
 
 collectionButton.Activated:Connect(function()
@@ -929,6 +946,8 @@ packResultEvent.OnClientEvent:Connect(function(result)
 		showToast(T("toast_full"))
 	elseif result.reason == "coins" then
 		showToast(T("toast_coins"))
+	elseif result.reason == "merge" then
+		showToast(T("toast_merge_fail"))
 	end
 end)
 
@@ -1039,6 +1058,8 @@ local function updateInfo()
 	infoCard.Visible = true
 end
 
+local MergeUi = { refresh = function() end } -- кнопку слияния создаёт блок ниже, он подменяет refresh
+
 -- Обновляет подсветку выбранной рыбы, кнопку продажи и карточку статистики
 local function refreshSelection()
 	if selectedId ~= nil and fishById[selectedId] == nil then
@@ -1053,6 +1074,7 @@ local function refreshSelection()
 		sellButton.Visible = false
 	end
 	updateInfo()
+	MergeUi.refresh()
 end
 
 local function selectFish(id)
@@ -1077,6 +1099,80 @@ sellButton.Activated:Connect(function()
 		refreshSelection()
 	end
 end)
+
+-- ===== Слияние и наборы =====
+-- Кнопка под «Продать»: пять одинаковых рыб (вид + цвет в этом аквариуме) сливаются в одну следующего цвета.
+-- Пока рыб меньше пяти, кнопка серая и показывает прогресс. Что и как сливать, решает сервер.
+do
+	local mergeEvent = remotes:WaitForChild("MergeFish")
+	local setsEvent = remotes:WaitForChild("SetsChanged")
+	local mergeButton = make("TextButton", {
+		Name = "MergeButton",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.fromScale(0.5, 0.4),
+		Size = UDim2.fromScale(0.7, 0.06),
+		BackgroundColor3 = COLOR_BUTTON,
+		BorderSizePixel = 0,
+		TextScaled = true,
+		MinText = 12,
+		TextColor3 = WHITE,
+		Font = FONT,
+		ZIndex = 4,
+		Visible = false,
+	}, gui)
+	make("UICorner", { CornerRadius = UDim.new(0.25, 0) }, mergeButton)
+
+	-- Сколько рыб того же вида и цвета в том же аквариуме (включая выбранную)
+	local function sameCount(data)
+		local count = 0
+		for _, fish in pairs(fishById) do
+			local other = fish.data
+			if other.tank == data.tank and other.species == data.species and (other.variant or "normal") == (data.variant or "normal") then
+				count += 1
+			end
+		end
+		return count
+	end
+
+	function MergeUi.refresh()
+		local fish = selectedId ~= nil and fishById[selectedId] or nil
+		local nextVariant = fish ~= nil and FishConfig.nextVariant(fish.data.variant) or nil
+		if fish == nil or nextVariant == nil then
+			mergeButton.Visible = false
+			return
+		end
+		local have = sameCount(fish.data)
+		mergeButton.Visible = true
+		if have >= FishConfig.MERGE_COUNT then
+			mergeButton.Text = T("merge", FishConfig.MERGE_COUNT, Strings.variant(nextVariant))
+			mergeButton.BackgroundColor3 = COLOR_BUTTON
+		else
+			mergeButton.Text = T("merge_progress", have, FishConfig.MERGE_COUNT)
+			mergeButton.BackgroundColor3 = COLOR_MUTED
+		end
+	end
+
+	mergeButton.Activated:Connect(function()
+		local fish = selectedId ~= nil and fishById[selectedId] or nil
+		if fish == nil then
+			return
+		end
+		if sameCount(fish.data) >= FishConfig.MERGE_COUNT then
+			mergeEvent:FireServer(selectedId) -- только id: остальных рыб и результат выбирает сервер
+			selectedId = nil
+			refreshSelection()
+		else
+			showToast(T("toast_merge_fail"))
+		end
+	end)
+
+	setsEvent.OnClientEvent:Connect(function(state)
+		if typeof(state) == "table" then
+			setsState = state
+			refreshCollection()
+		end
+	end)
+end
 
 -- Жизнь одной рыбы: выбрать точку -> доплыть -> пауза -> повторить
 local function swim(fish)

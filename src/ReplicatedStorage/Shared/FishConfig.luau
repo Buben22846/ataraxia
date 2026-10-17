@@ -259,4 +259,33 @@ function FishConfig.newTank()
 	return { slots = FishConfig.START_SLOTS, fish = {} }
 end
 
+-- ===== Слияние =====
+-- MERGE_COUNT одинаковых рыб (вид + цвет в одном аквариуме) сливаются в одну рыбу следующего цвета:
+-- обычная -> золотая -> радужная. Новая рыба появляется «мальком» (возраст 0), зато занимает одно место вместо пяти.
+FishConfig.MERGE_COUNT = 5
+
+-- Следующий цвет после variantId (nil, если выше некуда)
+function FishConfig.nextVariant(variantId)
+	local current = variantId or "normal"
+	for index, id in ipairs(FishConfig.VariantOrder) do
+		if id == current then
+			return FishConfig.VariantOrder[index + 1]
+		end
+	end
+	return nil
+end
+
+-- ===== Наборы коллекции =====
+-- Набор аквариума — все его виды. У набора три ступени; каждая собранная ступень даёт постоянную прибавку
+-- к доходу рыб ЭТОГО аквариума (прибавки складываются):
+--   found   — все виды хотя бы раз выпали (любого цвета)
+--   golden  — у вас была золотая рыба каждого вида
+--   rainbow — у вас была радужная рыба каждого вида
+-- variant = nil означает «любой цвет».
+FishConfig.SetTiers = {
+	{ id = "found", variant = nil, bonus = 0.10 },
+	{ id = "golden", variant = "golden", bonus = 0.25 },
+	{ id = "rainbow", variant = "rainbow", bonus = 0.50 },
+}
+
 return FishConfig

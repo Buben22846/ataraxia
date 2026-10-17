@@ -15,6 +15,8 @@ local AnalyticsService = game:GetService("AnalyticsService")
 local MarketplaceService = game:GetService("MarketplaceService")
 local PolicyService = game:GetService("PolicyService")
 local Shop = require(ServerScriptService:WaitForChild("Shop"))
+local Collection = require(ServerScriptService:WaitForChild("Collection"))
+local Merge = require(ServerScriptService:WaitForChild("Merge"))
 
 -- ===== НАСТРОЙКИ =====
 -- Аквариумы игрока лежат в профиле (profile.tanks[id] = { slots, fish }), максимум мест и цены — в FishConfig.
@@ -25,6 +27,8 @@ local openPackEvent = remotes:WaitForChild("OpenPack")
 local packResultEvent = remotes:WaitForChild("PackResult")
 local collectionChangedEvent = remotes:WaitForChild("CollectionChanged")
 local sellFishEvent = remotes:WaitForChild("SellFish")
+local mergeFishEvent = remotes:WaitForChild("MergeFish")
+local setsChangedEvent = remotes:WaitForChild("SetsChanged")
 local coinsChangedEvent = remotes:WaitForChild("CoinsChanged")
 local fishChangedEvent = remotes:WaitForChild("FishChanged")
 local clientReadyEvent = remotes:WaitForChild("ClientReady")
@@ -197,6 +201,12 @@ local function sendCollection(player, profile)
 	collectionChangedEvent:FireClient(player, list)
 end
 
+-- Наборы коллекции: прогресс по ступеням и бонус к доходу каждого аквариума
+local function sendSets(player, profile)
+	Collection.sync(profile) -- дописываем в память игрока всех рыб, что сейчас в аквариумах
+	setsChangedEvent:FireClient(player, Collection.summary(profile))
+end
+
 local function pushState(player)
 	local profile = PlayerData.get(player)
 	if profile == nil then
@@ -205,6 +215,7 @@ local function pushState(player)
 	sendCoins(player, profile)
 	sendFish(player, profile)
 	sendCollection(player, profile)
+	sendSets(player, profile)
 
 	dailyStateEvent:FireClient(player, DailyReward.state(profile, os.time()))
 	tutorialDoneEvent:FireClient(player, profile.tutorialDone)
@@ -319,8 +330,44 @@ openPackEvent.OnServerEvent:Connect(function(player, packId)
 	sendCoins(player, profile)
 	sendFish(player, profile)
 	sendCollection(player, profile)
+	sendSets(player, profile)
 	trackStep(player, 2)
 	packResultEvent:FireClient(player, { ok = true, species = speciesId, rarity = rarity, variant = variant, isNew = isNew })
+end)
+
+-- ===== Слияние =====
+-- Клиент присылает только id выбранной рыбы; остальных рыб, результат и награду выбирает сервер (см. Merge).
+mergeFishEvent.OnServerEvent:Connect(function(player, fishId)
+	if not allow(player, "MergeFish", 2, 3) then
+		return
+	end
+	if typeof(fishId) ~= "number" or fishId ~= fishId or fishId ~= math.floor(fishId) then
+		return
+	end
+	local profile = PlayerData.get(player)
+	if profile == nil then
+		return
+	end
+	local ok, newFish, isNewVariant = Merge.perform(profile, fishId, os.time())
+	if not ok then
+		if newFish == "count" or newFish == "max" then
+			packResultEvent:FireClient(player, { ok = false, reason = "merge" })
+		end
+		return
+	end
+	local species = FishConfig.Species[newFish.species]
+	print(player.Name, "слил рыб ->", newFish.species, newFish.variant)
+	sendFish(player, profile)
+	sendCollection(player, profile)
+	sendSets(player, profile)
+	packResultEvent:FireClient(player, {
+		ok = true,
+		merged = true,
+		species = newFish.species,
+		rarity = species.rarity,
+		variant = newFish.variant,
+		isNew = isNewVariant,
+	})
 end)
 
 -- ===== Ежедневная награда =====
