@@ -31,6 +31,7 @@ local tutorialDoneEvent = remotes:WaitForChild("TutorialDone")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local FishConfig = require(Shared:WaitForChild("FishConfig"))
 local Sprites = require(Shared:WaitForChild("Sprites"))
+local UIKit = require(Shared:WaitForChild("UIKit"))
 local Strings = require(Shared:WaitForChild("Strings"))
 local T = Strings.t
 
@@ -113,6 +114,9 @@ local function make(className, props, parent)
 		end)
 	end
 	inst.Parent = parent
+	if className == "TextButton" and props.BackgroundTransparency == nil then
+		UIKit.button(inst)
+	end
 	return inst
 end
 
@@ -329,6 +333,7 @@ coinsLabel.Size = UDim2.fromScale(0.34, TOP_H)
 coinsLabel.Text = T("coins", 0)
 make("UITextSizeConstraint", { MinTextSize = 12, MaxTextSize = 28 }, coinsLabel)
 make("UICorner", { CornerRadius = UDim.new(0.25, 0) }, coinsLabel)
+UIKit.label(coinsLabel)
 
 local fishCountLabel = make("TextLabel", {
 	Name = "FishCountLabel",
@@ -344,6 +349,7 @@ local fishCountLabel = make("TextLabel", {
 	ZIndex = 3,
 }, gui)
 make("UICorner", { CornerRadius = UDim.new(0.25, 0) }, fishCountLabel)
+UIKit.label(fishCountLabel)
 
 local giftButton = iconButton("DailyButton", "🎁", 0.57)
 local giftDot = make("Frame", {
@@ -504,6 +510,7 @@ local function makePanel(name)
 		ZIndex = 11,
 	}, overlay)
 	make("UICorner", { CornerRadius = UDim.new(0.04, 0) }, card)
+	UIKit.frame(card, "ui_panel")
 
 	local title = make("TextLabel", {
 		Name = "Title",
@@ -1607,6 +1614,7 @@ do
 			ZIndex = 12,
 		}, settingsPanel.list)
 		make("UICorner", { CornerRadius = UDim.new(0.12, 0) }, row)
+		UIKit.frame(row, "ui_row")
 		make("TextLabel", {
 			Name = "Title",
 			Position = UDim2.fromScale(0.04, 0.2),
@@ -1788,6 +1796,7 @@ do
 			ZIndex = 12,
 		}, shopPanel.list)
 		make("UICorner", { CornerRadius = UDim.new(0.12, 0) }, row)
+		UIKit.frame(row, "ui_row")
 		make("TextLabel", {
 			Name = "Title",
 			Position = UDim2.fromScale(0.03, 0.08),

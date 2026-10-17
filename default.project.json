@@ -21,6 +21,9 @@
         },
         "SpriteAssets": {
           "$path": "src/ReplicatedStorage/Shared/SpriteAssets.luau"
+        },
+        "UIKit": {
+          "$path": "src/ReplicatedStorage/Shared/UIKit.luau"
         }
       },
       "Remotes": {
