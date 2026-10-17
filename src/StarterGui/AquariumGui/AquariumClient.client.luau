@@ -1513,6 +1513,236 @@ end)
 
 pcall(Daily.build)
 
+-- ===== Магазин за Robux =====
+-- Клиент только рисует кнопки и открывает окна подтверждения Roblox. Ничего не списывается и не выдаётся здесь:
+-- пасс и монеты выдаёт сервер, а состояние пасса приходит событием ShopState { doubleCoins = boolean }.
+-- Пока в FishConfig.Shop все id равны 0, кнопка магазина скрыта. Цену в Robux не показываем: её покажет Roblox.
+-- Весь блок в do ... end, чтобы не расходовать лимит локальных переменных главной функции.
+do
+	local MarketplaceService = game:GetService("MarketplaceService")
+	local shopStateEvent = remotes:WaitForChild("ShopState", 10) -- nil, если события нет: остальной интерфейс не страдает
+
+	local Shop = { state = nil, lastPrompt = 0 }
+	local shopPanel = makePanel("ShopPanel")
+	shopPanel.title.Text = T("shop_title")
+	shopPanel.list.Size = UDim2.fromScale(0.9, 0.7)
+	local shopButton = iconButton("ShopButton", "🛒", 0.725)
+
+	-- Маленький значок «×2» у монет (на нижнем крае, чтобы не закрывать число)
+	local doubleBadge = make("TextLabel", {
+		Name = "DoubleBadge",
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.fromScale(1, 1),
+		Size = UDim2.fromScale(0.2, 0.42),
+		BackgroundColor3 = COLOR_GOLD,
+		BorderSizePixel = 0,
+		Text = "×2",
+		TextScaled = true,
+		MinText = 9,
+		MaxText = 18,
+		TextColor3 = Color3.fromRGB(60, 40, 0),
+		Font = FONT,
+		Visible = false,
+		ZIndex = 5,
+	}, coinsLabel)
+	make("UICorner", { CornerRadius = UDim.new(0.3, 0) }, doubleBadge)
+
+	local function passId()
+		local pass = FishConfig.Shop and FishConfig.Shop.DoubleCoins
+		return if pass then (tonumber(pass.passId) or 0) else 0
+	end
+
+	-- Товары, у которых id уже настроен
+	local function activeProducts()
+		local result = {}
+		local products = FishConfig.Shop and FishConfig.Shop.Products
+		for _, product in ipairs(products or {}) do
+			if (tonumber(product.productId) or 0) > 0 then
+				table.insert(result, product)
+			end
+		end
+		return result
+	end
+
+	local function isConfigured()
+		return passId() > 0 or #activeProducts() > 0
+	end
+
+	-- Форма слова по числу: ru — 1 / 2-4 / 5+, en — 1 / остальные (ключи prefix_1, prefix_2, prefix_5)
+	local function pluralKey(prefix, n)
+		if Strings.language() == "ru" then
+			local last, last2 = n % 10, n % 100
+			if last2 >= 11 and last2 <= 14 then
+				return prefix .. "_5"
+			elseif last == 1 then
+				return prefix .. "_1"
+			elseif last >= 2 and last <= 4 then
+				return prefix .. "_2"
+			end
+			return prefix .. "_5"
+		end
+		return prefix .. (if n == 1 then "_1" else "_5")
+	end
+
+	-- 3600 -> «1 час» / «1 hour», 28800 -> «8 часов» / «8 hours»
+	local function durationText(seconds)
+		seconds = tonumber(seconds) or 0
+		if seconds >= 3600 and seconds % 3600 == 0 then
+			local hours = seconds // 3600
+			return T(pluralKey("dur_h", hours), hours)
+		elseif seconds >= 60 and seconds % 60 == 0 then
+			local minutes = seconds // 60
+			return T(pluralKey("dur_m", minutes), minutes)
+		end
+		return T("dur_s", seconds)
+	end
+
+	-- Открывает окно покупки Roblox. Любая ошибка (в том числе в самом вызове) не роняет интерфейс.
+	local function prompt(label, fn)
+		local now = os.clock()
+		if now - Shop.lastPrompt < 1 then
+			return -- защита от двойного нажатия
+		end
+		Shop.lastPrompt = now
+		local ok, err = pcall(fn)
+		if not ok then
+			warn("[Ataraxia] " .. label .. ": " .. tostring(err))
+			showToast(T("shop_error"), COLOR_WARN, 3)
+		end
+	end
+
+	-- Строка магазина: слева название и описание, справа кнопка «Купить» (или «✓ Куплено», если owned)
+	local function addShopRow(order, height, titleText, descText, owned, onBuy)
+		local row = make("Frame", {
+			Size = UDim2.fromScale(1, height),
+			BackgroundColor3 = COLOR_ROW,
+			BorderSizePixel = 0,
+			LayoutOrder = order,
+			ZIndex = 12,
+		}, shopPanel.list)
+		make("UICorner", { CornerRadius = UDim.new(0.12, 0) }, row)
+		make("TextLabel", {
+			Name = "Title",
+			Position = UDim2.fromScale(0.03, 0.08),
+			Size = UDim2.fromScale(0.62, 0.38),
+			BackgroundTransparency = 1,
+			Text = titleText,
+			TextScaled = true,
+			MinText = 12,
+			MaxText = 22,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextColor3 = COLOR_GOLD,
+			Font = FONT,
+			ZIndex = 13,
+		}, row)
+		make("TextLabel", {
+			Name = "Desc",
+			Position = UDim2.fromScale(0.03, 0.48),
+			Size = UDim2.fromScale(0.62, 0.46),
+			BackgroundTransparency = 1,
+			Text = descText,
+			TextScaled = true,
+			TextWrapped = true,
+			MinText = 10,
+			MaxText = 15,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextYAlignment = Enum.TextYAlignment.Top,
+			TextColor3 = Color3.fromRGB(190, 220, 230),
+			Font = FONT,
+			ZIndex = 13,
+		}, row)
+		if owned then
+			make("TextLabel", {
+				Name = "Owned",
+				Position = UDim2.fromScale(0.68, 0.2),
+				Size = UDim2.fromScale(0.29, 0.6),
+				BackgroundTransparency = 1,
+				Text = T("shop_owned"),
+				TextScaled = true,
+				MinText = 11,
+				MaxText = 20,
+				TextColor3 = COLOR_BUTTON,
+				Font = FONT,
+				ZIndex = 13,
+			}, row)
+		else
+			local buy = make("TextButton", {
+				Name = "Buy",
+				Position = UDim2.fromScale(0.68, 0.2),
+				Size = UDim2.fromScale(0.29, 0.6),
+				BackgroundColor3 = COLOR_BUTTON,
+				BorderSizePixel = 0,
+				Text = T("shop_buy"),
+				TextScaled = true,
+				MinText = 11,
+				MaxText = 22,
+				TextColor3 = WHITE,
+				Font = FONT,
+				ZIndex = 13,
+			}, row)
+			make("UICorner", { CornerRadius = UDim.new(0.25, 0) }, buy)
+			buy.Activated:Connect(onBuy)
+		end
+	end
+
+	function Shop.refresh()
+		clearRows(shopPanel.list)
+		local pass = passId()
+		local products = activeProducts()
+		local count = #products + (if pass > 0 then 1 else 0)
+		if count == 0 then
+			return
+		end
+		local height = math.min(0.3, (1 - 0.02 * (count - 1)) / count)
+		local order = 0
+
+		if pass > 0 then
+			order += 1
+			local owned = Shop.state ~= nil and Shop.state.doubleCoins == true
+			addShopRow(order, height, T("shop_double_title"), T("shop_double_desc"), owned, function()
+				prompt("PromptGamePassPurchase", function()
+					MarketplaceService:PromptGamePassPurchase(localPlayer, pass)
+				end)
+			end)
+		end
+
+		for _, product in ipairs(products) do
+			order += 1
+			local productId = product.productId
+			local duration = durationText(product.seconds)
+			addShopRow(order, height, T("shop_coins_title", duration), T("shop_coins_desc", duration), false, function()
+				prompt("PromptProductPurchase", function()
+					MarketplaceService:PromptProductPurchase(localPlayer, productId)
+				end)
+			end)
+		end
+	end
+
+	shopButton.Visible = isConfigured()
+	shopButton.Activated:Connect(function()
+		Shop.refresh()
+		shopPanel.overlay.Visible = true
+	end)
+	pcall(Shop.refresh)
+
+	if shopStateEvent ~= nil then
+		shopStateEvent.OnClientEvent:Connect(safely("ShopState", function(state)
+			if typeof(state) ~= "table" then
+				return
+			end
+			local owned = state.doubleCoins == true
+			local previous = Shop.state
+			Shop.state = { doubleCoins = owned }
+			doubleBadge.Visible = owned
+			if previous ~= nil and not previous.doubleCoins and owned then
+				Sfx.play("reward")
+				showToast(T("shop_unlocked"), COLOR_BUTTON, 3)
+			end
+			Shop.refresh()
+		end))
+	end
+end
+
 -- ===== Обучение =====
 local tutorialPlate, tutorialText, tutorialButton
 local tutorialHighlight, tutorialPulse, tutorialTarget
