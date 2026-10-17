@@ -102,6 +102,7 @@ local function make(className, props, parent)
 	for key, value in pairs(props) do
 		inst[key] = value
 	end
+	UIKit.font(inst) -- единый пиксельный шрифт для всех текстов
 	if props.TextScaled and (className == "TextLabel" or className == "TextButton") then
 		local limit = Instance.new("UITextSizeConstraint")
 		limit.MinTextSize = minText or 11
@@ -253,7 +254,11 @@ local COLOR_MUTED = Color3.fromRGB(120, 144, 156)
 local COLOR_GOLD = Color3.fromRGB(255, 202, 40)
 local COLOR_WARN = Color3.fromRGB(231, 111, 81)
 local COLOR_ALERT = Color3.fromRGB(229, 57, 53)
-local FONT = Enum.Font.GothamBold
+local FONT = Enum.Font.GothamBold -- запасной; поверх него UIKit.font ставит пиксельный FontFace
+-- Тексты, созданные в Studio (монеты, число рыб, кнопка паков и др.), тоже получают пиксельный шрифт
+for _, d in ipairs(gui:GetDescendants()) do
+	UIKit.font(d)
+end
 
 -- Раскладка верхней части экрана (доли безопасной зоны): строка 1 — монеты, рыбы, кнопки; строка 2 — аквариум
 local TOP_Y, TOP_H = 0.012, 0.07
@@ -1792,34 +1797,77 @@ do
 	end
 
 	-- Строка магазина: слева название и описание, справа кнопка «Купить» (или «✓ Куплено», если owned)
-	local function addShopRow(order, height, titleText, descText, owned, onBuy)
+	-- opts (необязательно): banner — золотой баннер главного предложения с лентой «Выгодно»; icon — имя картинки слева (монета)
+	local function addShopRow(order, height, titleText, descText, owned, onBuy, opts)
+		opts = opts or {}
+		local banner = opts.banner == true
 		local row = make("Frame", {
 			Size = UDim2.fromScale(1, height),
-			BackgroundColor3 = COLOR_ROW,
+			BackgroundColor3 = if banner then COLOR_GOLD else COLOR_ROW,
 			BorderSizePixel = 0,
 			LayoutOrder = order,
 			ZIndex = 12,
 		}, shopPanel.list)
 		make("UICorner", { CornerRadius = UDim.new(0.12, 0) }, row)
-		UIKit.frame(row, "ui_row")
+		UIKit.frame(row, if banner then "ui_banner" else "ui_row")
+		local textX = 0.03
+		if opts.icon then
+			-- иконка слева, текст сдвигается вправо
+			local icon = Instance.new("ImageLabel")
+			icon.Name = "Icon"
+			icon.BackgroundTransparency = 1
+			icon.AnchorPoint = Vector2.new(0, 0.5)
+			icon.Position = UDim2.fromScale(0.03, 0.5)
+			icon.Size = UDim2.fromScale(0.1, 0.5)
+			icon.ZIndex = 13
+			local ratio = Instance.new("UIAspectRatioConstraint")
+			ratio.Parent = icon
+			if Sprites.apply(icon, opts.icon, false) then
+				icon.Parent = row
+				textX = 0.15
+			else
+				icon:Destroy()
+			end
+		end
+		local textW = 0.65 - textX
+		local titleColor = if banner then Color3.fromRGB(60, 40, 0) else COLOR_GOLD
+		local descColor = if banner then Color3.fromRGB(95, 62, 0) else Color3.fromRGB(190, 220, 230)
+		if banner then
+			-- лента «Выгодно» на верхней кромке баннера
+			local ribbon = make("TextLabel", {
+				Name = "Ribbon",
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.fromScale(0.97, 0),
+				Size = UDim2.fromScale(0.34, 0.26),
+				BackgroundColor3 = COLOR_ALERT,
+				BorderSizePixel = 0,
+				Text = T("shop_best"),
+				TextScaled = true,
+				MinText = 8,
+				MaxText = 16,
+				TextColor3 = Color3.fromRGB(255, 241, 193),
+				ZIndex = 15,
+			}, row)
+			UIKit.ticket(ribbon)
+		end
 		make("TextLabel", {
 			Name = "Title",
-			Position = UDim2.fromScale(0.03, 0.08),
-			Size = UDim2.fromScale(0.62, 0.38),
+			Position = UDim2.fromScale(textX, 0.08),
+			Size = UDim2.fromScale(textW, 0.38),
 			BackgroundTransparency = 1,
 			Text = titleText,
 			TextScaled = true,
 			MinText = 12,
 			MaxText = 22,
 			TextXAlignment = Enum.TextXAlignment.Left,
-			TextColor3 = COLOR_GOLD,
+			TextColor3 = titleColor,
 			Font = FONT,
 			ZIndex = 13,
 		}, row)
 		make("TextLabel", {
 			Name = "Desc",
-			Position = UDim2.fromScale(0.03, 0.48),
-			Size = UDim2.fromScale(0.62, 0.46),
+			Position = UDim2.fromScale(textX, 0.48),
+			Size = UDim2.fromScale(textW, 0.46),
 			BackgroundTransparency = 1,
 			Text = descText,
 			TextScaled = true,
@@ -1828,7 +1876,7 @@ do
 			MaxText = 15,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			TextYAlignment = Enum.TextYAlignment.Top,
-			TextColor3 = Color3.fromRGB(190, 220, 230),
+			TextColor3 = descColor,
 			Font = FONT,
 			ZIndex = 13,
 		}, row)
@@ -1879,16 +1927,22 @@ do
 			return
 		end
 		local height = math.min(0.3, (1 - 0.02 * (count - 1)) / count)
+		local bannerHeight = height
+		if pass > 0 and #products > 0 then
+			-- главное предложение выше остальных; на строки товаров остаётся остальное место
+			bannerHeight = 0.36
+			height = math.min(0.3, (1 - bannerHeight - 0.02 * count) / #products)
+		end
 		local order = 0
 
 		if pass > 0 then
 			order += 1
 			local owned = Shop.state ~= nil and Shop.state.doubleCoins == true
-			addShopRow(order, height, T("shop_double_title"), T("shop_double_desc"), owned, function()
+			addShopRow(order, bannerHeight, T("shop_double_title"), T("shop_double_desc"), owned, function()
 				prompt("PromptGamePassPurchase", function()
 					MarketplaceService:PromptGamePassPurchase(localPlayer, pass)
 				end)
-			end)
+			end, { banner = true })
 		end
 
 		for _, product in ipairs(products) do
@@ -1899,7 +1953,7 @@ do
 				prompt("PromptProductPurchase", function()
 					MarketplaceService:PromptProductPurchase(localPlayer, productId)
 				end)
-			end)
+			end, { icon = "ui_coin" })
 		end
 	end
 

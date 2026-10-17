@@ -8,11 +8,23 @@ local Sprites = require(script.Parent:WaitForChild("Sprites"))
 
 local UIKit = {}
 
+-- Пиксельный шрифт (есть в Roblox, поддерживает кириллицу). Если шрифт не загрузится, остаётся прежний.
+UIKit.PIXEL_FONT = Font.new("rbxasset://fonts/families/PressStart2P.json", Enum.FontWeight.Regular, Enum.FontStyle.Normal)
+
+function UIKit.font(inst)
+	if inst:IsA("TextLabel") or inst:IsA("TextButton") or inst:IsA("TextBox") then
+		pcall(function()
+			inst.FontFace = UIKit.PIXEL_FONT
+		end)
+	end
+end
+
 -- размер картинки и ширина угла (SliceCenter), в пикселях исходника
 local SLICE = {
 	ui_panel = { size = 24, corner = 6 },
 	ui_row = { size = 12, corner = 4 },
 	-- билет не квадратный: ширина w, высота h, угол по горизонтали cx и по вертикали cy
+	ui_banner = { size = 24, corner = 8 },
 	ui_ticket = { w = 32, h = 16, cx = 10, cy = 5 },
 	ui_ticket_down = { w = 32, h = 16, cx = 10, cy = 5 },
 }
@@ -135,6 +147,9 @@ local function skinText(button, fixedLook)
 		text.ZIndex = 2
 		text.Active = false
 		text.Font = button.Font
+		pcall(function()
+			text.FontFace = button.FontFace
+		end)
 		text.TextScaled = button.TextScaled
 		text.TextSize = button.TextSize
 		text.TextWrapped = button.TextWrapped

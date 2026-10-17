@@ -124,7 +124,47 @@ def ticket(down=False):
     return img
 
 
+def banner():
+    """Золотой баннер 24x24 для главного предложения: тёмно-золотая внутренняя рамка и искры в углах (срез 8 px)."""
+    img = box(24, 24, 3, "#ffca28", "#fff0a8", "#d99a00", raised=True, edge_rows=2)
+    inner = "#b9770e"
+    for x in range(4, 20):
+        for y in (3, 20):
+            img.putpixel((x, y), hx(inner))
+    for y in range(4, 20):
+        for x in (3, 20):
+            img.putpixel((x, y), hx(inner))
+    for (sx, sy) in ((6, 6), (17, 6), (6, 17), (17, 17)):
+        img.putpixel((sx, sy), hx("#ffffff"))
+    return img
+
+
+def coin():
+    """Монета 10x10 (не растягивается)."""
+    rows = [
+        "..oooooo..",
+        ".oyyyyyyo.",
+        "oyyhhhyyso",
+        "oyhyyyyyso",
+        "oyhyyyyyso",
+        "oyhyyyyyso",
+        "oyyyyyyyso",
+        "oyyyyyyyso",
+        ".osssssso.",
+        "..oooooo..",
+    ]
+    colors = {"o": OUT, "y": "#ffca28", "h": "#fff6c2", "s": "#d99a00"}
+    img = Image.new("RGBA", (10, 10), (0, 0, 0, 0))
+    for y, row in enumerate(rows):
+        for x, ch in enumerate(row):
+            if ch != ".":
+                img.putpixel((x, y), hx(colors[ch]))
+    return img
+
+
 ASSETS = {
+    "ui_banner": banner(),
+    "ui_coin": coin(),
     "ui_ticket": ticket(),
     "ui_ticket_down": ticket(True),
     "ui_panel": panel(),
