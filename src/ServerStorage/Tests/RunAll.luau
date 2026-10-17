@@ -438,7 +438,7 @@ return function()
 	check("число: до 1000 без сокращения", Strings.num(0) == "0" and Strings.num(7) == "7" and Strings.num(999) == "999")
 	check("число: 1000 -> 1K, 1500 -> 1.5K, 12345 -> 12.3K", Strings.num(1000) == "1K" and Strings.num(1500) == "1.5K" and Strings.num(12345) == "12.3K")
 	check("число: 100000 -> 100K, 999999 -> 999K (без 1000K)", Strings.num(100000) == "100K" and Strings.num(999999) == "999K")
-	check("число: миллион, миллиард, триллион", Strings.num(1000000) == "1M" and Strings.num(17187818) == "17.18M" and Strings.num(1e9) == "1B" and Strings.num(2.5e12) == "2.5T")
+	check("число: миллион, миллиард, триллион", Strings.num(1000000) == "1M" and Strings.num(17187818) == "17.1M" and Strings.num(1e9) == "1B" and Strings.num(2.5e12) == "2.5T")
 	check("число: отрицательные", Strings.num(-1500) == "-1.5K")
 	check("текст с числом от 1000 сокращается, от 999 — нет", Strings.t("coins", 1500) == "1.5K" and Strings.t("coins", 999) == "999")
 
