@@ -187,6 +187,28 @@ function FishConfig.stageFor(age)
 	return result
 end
 
+-- Номер стадии роста (1 — малёк, 2 — подросток, 3 — взрослая) по возрасту в секундах
+function FishConfig.stageIndex(age)
+	local index = 1
+	for i, stage in ipairs(FishConfig.GrowthStages) do
+		if age >= stage.from then
+			index = i
+		end
+	end
+	return index
+end
+
+-- «Ранг» цвета: обычная 1, золотая 2, радужная 3 (для сравнения «не хуже»)
+function FishConfig.variantRank(variantId)
+	local id = variantId or "normal"
+	for i, v in ipairs(FishConfig.VariantOrder) do
+		if v == id then
+			return i
+		end
+	end
+	return 1
+end
+
 -- Вариант по id (у старых рыб варианта нет — считаем обычной)
 function FishConfig.variantOf(variantId)
 	return FishConfig.Variants[variantId or "normal"] or FishConfig.Variants.normal
@@ -258,6 +280,28 @@ end
 function FishConfig.newTank()
 	return { slots = FishConfig.START_SLOTS, fish = {} }
 end
+
+-- ===== Музей: посетители и билеты =====
+-- В музее всегда ждут QUEUE_SIZE гостей. Каждый просит «показать» рыбу: нужный вид, не младше стадии роста и,
+-- возможно, золотого/радужного цвета. Рыба остаётся у игрока, за показ платят билетами. Штрафов нет:
+-- заказ, который не выполнили за ORDER_TTL секунд, просто заменяется новым. Гости приходят и пока игрока нет.
+--   RankThresholds — сколько выполненных заказов нужно для ранга 1, 2, 3 ... (ранг открывает редких рыб, стадии и цвета)
+--   RarityTickets  — базовая награда за вид данной редкости; её множат стадия, цвет и ранг
+--   Shop           — траты билетов: пак редких рыб и дополнительные места сверх MAX_SLOTS
+FishConfig.Visitors = {
+	QUEUE_SIZE = 3,
+	ORDER_TTL = 45 * 60,
+	REFILL_DELAY = 5 * 60,
+	RankThresholds = { 0, 5, 15, 35, 70, 120 },
+	RarityTickets = { common = 2, rare = 5, epic = 12, legendary = 30 },
+	StageMult = { 1, 1.5, 2 },
+	VariantMult = { normal = 1, golden = 3, rainbow = 8 },
+	RankBonus = 0.05,
+	Shop = {
+		rarepack = { price = 25, odds = { common = 0, rare = 70, epic = 25, legendary = 5 } },
+		slot = { price = 60, maxBonus = 2 }, -- цена умножается на номер дополнительного места (60, 120)
+	},
+}
 
 -- ===== Слияние =====
 -- MERGE_COUNT одинаковых рыб (вид + цвет в одном аквариуме) сливаются в одну рыбу следующего цвета:

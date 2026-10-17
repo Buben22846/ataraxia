@@ -17,6 +17,7 @@ local PolicyService = game:GetService("PolicyService")
 local Shop = require(ServerScriptService:WaitForChild("Shop"))
 local Collection = require(ServerScriptService:WaitForChild("Collection"))
 local Merge = require(ServerScriptService:WaitForChild("Merge"))
+local Visitors = require(ServerScriptService:WaitForChild("Visitors"))
 
 -- ===== НАСТРОЙКИ =====
 -- Аквариумы игрока лежат в профиле (profile.tanks[id] = { slots, fish }), максимум мест и цены — в FishConfig.
@@ -29,6 +30,8 @@ local collectionChangedEvent = remotes:WaitForChild("CollectionChanged")
 local sellFishEvent = remotes:WaitForChild("SellFish")
 local mergeFishEvent = remotes:WaitForChild("MergeFish")
 local setsChangedEvent = remotes:WaitForChild("SetsChanged")
+local visitorsStateEvent = remotes:WaitForChild("VisitorsState")
+local visitorActionEvent = remotes:WaitForChild("VisitorAction")
 local coinsChangedEvent = remotes:WaitForChild("CoinsChanged")
 local fishChangedEvent = remotes:WaitForChild("FishChanged")
 local clientReadyEvent = remotes:WaitForChild("ClientReady")
@@ -167,6 +170,16 @@ local function sendCoins(player, profile)
 	coinsChangedEvent:FireClient(player, profile.coins)
 end
 
+-- Музей: очередь гостей, билеты, ранг. notice (необязательно) — разовое сообщение клиенту, например награда за заказ.
+-- Вызывается и вместе со списком рыб: от рыб зависит, можно ли сейчас выполнить заказ.
+local function sendVisitors(player, profile, notice)
+	local now = os.time()
+	Visitors.refresh(profile, now)
+	local state = Visitors.summary(profile, now)
+	state.notice = notice
+	visitorsStateEvent:FireClient(player, state)
+end
+
 -- Рыбы всех аквариумов со статистикой (id, аквариум, вид, вариант, возраст в секундах, заработок)
 -- и число мест в каждом открытом аквариуме: { [tankId] = slots }
 local function sendFish(player, profile)
@@ -187,6 +200,7 @@ local function sendFish(player, profile)
 		end
 	end
 	fishChangedEvent:FireClient(player, list, tanksInfo)
+	sendVisitors(player, profile)
 end
 
 -- Коллекция: найденные виды в порядке SpeciesOrder со статистикой (сколько раз выпала, сколько заработано)
@@ -368,6 +382,79 @@ mergeFishEvent.OnServerEvent:Connect(function(player, fishId)
 		variant = newFish.variant,
 		isNew = isNewVariant,
 	})
+end)
+
+-- ===== Музей: заказы гостей и траты билетов =====
+-- Клиент присылает только действие и id: награду, подходящую рыбу, цены и результат сервер определяет сам.
+--   ("fulfill", orderId) — показать рыбу гостю; ("shop", "rarepack", tankId) / ("shop", "slot", tankId) — потратить билеты.
+visitorActionEvent.OnServerEvent:Connect(function(player, action, a, b)
+	if not allow(player, "Visitors", 3, 6) then
+		return
+	end
+	local profile = PlayerData.get(player)
+	if profile == nil then
+		return
+	end
+
+	if action == "fulfill" then
+		if typeof(a) ~= "number" or a ~= a or a ~= math.floor(a) then
+			return
+		end
+		local ok, info = Visitors.fulfill(profile, a, os.time())
+		if ok then
+			print(player.Name, "показал рыбу гостю: +" .. info.tickets, "билетов, ранг", info.rank)
+			sendVisitors(player, profile, { kind = "reward", tickets = info.tickets, rank = info.rank, rankUp = info.rankUp })
+		else
+			sendVisitors(player, profile, { kind = "fail", reason = info })
+		end
+		return
+	end
+
+	if action ~= "shop" or typeof(a) ~= "string" or typeof(b) ~= "string" then
+		return
+	end
+	local item = FishConfig.Visitors.Shop[a]
+	local tankData = profile.tanks[b]
+	if item == nil or tankData == nil then
+		return
+	end
+
+	if a == "rarepack" then
+		if #tankData.fish >= tankData.slots then
+			packResultEvent:FireClient(player, { ok = false, reason = "full" })
+			return
+		end
+		if not Visitors.spend(profile, item.price) then
+			sendVisitors(player, profile, { kind = "fail", reason = "tickets" })
+			return
+		end
+		local speciesId, rarity = PackRoller.roll({ tank = b, odds = item.odds })
+		local variant = FishConfig.rollVariant()
+		table.insert(tankData.fish, { id = profile.nextFishId, species = speciesId, variant = variant, born = os.time(), earned = 0 })
+		profile.nextFishId += 1
+		local isNew = not profile.discovered[speciesId]
+		profile.discovered[speciesId] = true
+		statsFor(profile, speciesId).pulled += 1
+		print(player.Name, "открыл пак за билеты ->", speciesId, variant)
+		sendFish(player, profile)
+		sendCollection(player, profile)
+		sendSets(player, profile)
+		packResultEvent:FireClient(player, { ok = true, species = speciesId, rarity = rarity, variant = variant, isNew = isNew })
+	elseif a == "slot" then
+		-- дополнительные места сверх лимита монетных мест: только когда монетные места куплены все
+		local extra = tankData.slots - FishConfig.MAX_SLOTS
+		if extra < 0 or extra >= item.maxBonus then
+			sendVisitors(player, profile, { kind = "fail", reason = "slotlimit" })
+			return
+		end
+		if not Visitors.spend(profile, item.price * (extra + 1)) then
+			sendVisitors(player, profile, { kind = "fail", reason = "tickets" })
+			return
+		end
+		tankData.slots += 1
+		print(player.Name, "купил за билеты место в", b, "всего мест:", tankData.slots)
+		sendFish(player, profile)
+	end
 end)
 
 -- ===== Ежедневная награда =====

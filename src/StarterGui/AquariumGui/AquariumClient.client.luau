@@ -455,7 +455,7 @@ refreshSlotsUi()
 local tankButton = make("TextButton", {
 	Name = "TankButton",
 	Position = UDim2.fromScale(0.02, TANK_ROW_Y),
-	Size = UDim2.fromScale(0.96, TOP_H),
+	Size = UDim2.fromScale(0.72, TOP_H), -- справа от выбора аквариума стоит кнопка музея
 	BackgroundColor3 = COLOR_PANEL,
 	BorderSizePixel = 0,
 	TextScaled = true,
@@ -1170,6 +1170,207 @@ do
 		if typeof(state) == "table" then
 			setsState = state
 			refreshCollection()
+		end
+	end)
+end
+
+-- ===== Музей: посетители, заказы, билеты =====
+-- Сервер держит очередь из 3 гостей и сам решает, подходит ли рыба. Здесь только рисуем и шлём намерения:
+-- ("fulfill", id заказа) и ("shop", товар, аквариум). Рыба при показе не тратится.
+do
+	local visitorsEvent = remotes:WaitForChild("VisitorsState")
+	local actionEvent = remotes:WaitForChild("VisitorAction")
+	local VC = FishConfig.Visitors
+	local museum = { state = nil, receivedAt = 0 }
+
+	local museumButton = make("TextButton", {
+		Name = "MuseumButton",
+		Position = UDim2.fromScale(0.76, TANK_ROW_Y),
+		Size = UDim2.fromScale(0.22, TOP_H),
+		BackgroundColor3 = COLOR_GOLD,
+		BorderSizePixel = 0,
+		Text = T("museum_btn", 0),
+		TextScaled = true,
+		MinText = 12,
+		TextColor3 = Color3.fromRGB(60, 40, 0),
+		Font = FONT,
+		ZIndex = 3,
+	}, gui)
+	make("UICorner", { CornerRadius = UDim.new(0.25, 0) }, museumButton)
+	local museumDot = make("Frame", {
+		Name = "RedDot",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.96, 0.08),
+		Size = UDim2.fromScale(0.2, 0.34),
+		BackgroundColor3 = COLOR_ALERT,
+		BorderSizePixel = 0,
+		Visible = false,
+		ZIndex = 6,
+	}, museumButton)
+	make("UICorner", { CornerRadius = UDim.new(0.5, 0) }, museumDot)
+	make("UIStroke", { Color = WHITE, Thickness = 1.5 }, museumDot)
+
+	local museumPanel = makePanel("MuseumPanel")
+	addHint(museumPanel, T("museum_hint"))
+	museumPanel.list.Size = UDim2.fromScale(0.9, 0.6)
+
+	-- Строка: слева текст в две строки, справа кнопка (enabled — зелёная, иначе серая)
+	local function addMuseumRow(order, leftText, leftColor, buttonText, enabled, onClick)
+		local row = make("Frame", {
+			Size = UDim2.fromScale(1, 0.17),
+			BackgroundColor3 = COLOR_ROW,
+			BorderSizePixel = 0,
+			LayoutOrder = order,
+			ZIndex = 12,
+		}, museumPanel.list)
+		make("UICorner", { CornerRadius = UDim.new(0.15, 0) }, row)
+		UIKit.frame(row, "ui_row")
+		make("TextLabel", {
+			Name = "Info",
+			Position = UDim2.fromScale(0.03, 0.08),
+			Size = UDim2.fromScale(if buttonText then 0.6 else 0.94, 0.84),
+			BackgroundTransparency = 1,
+			Text = leftText,
+			TextScaled = true,
+			TextWrapped = true,
+			MinText = 9,
+			MaxText = 18,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextColor3 = leftColor,
+			Font = FONT,
+			ZIndex = 13,
+		}, row)
+		if buttonText then
+			local button = make("TextButton", {
+				Name = "Action",
+				Position = UDim2.fromScale(0.66, 0.14),
+				Size = UDim2.fromScale(0.31, 0.72),
+				BackgroundColor3 = if enabled then COLOR_BUTTON else COLOR_MUTED,
+				BorderSizePixel = 0,
+				Text = buttonText,
+				TextScaled = true,
+				MinText = 10,
+				MaxText = 20,
+				TextColor3 = WHITE,
+				Font = FONT,
+				ZIndex = 13,
+			}, row)
+			make("UICorner", { CornerRadius = UDim.new(0.25, 0) }, button)
+			button.Activated:Connect(onClick)
+		end
+	end
+
+	local function timeLeft(seconds)
+		return formatAge(math.max(0, seconds - (os.clock() - museum.receivedAt)))
+	end
+
+	local function refreshPanel()
+		local state = museum.state
+		if state == nil then
+			return
+		end
+		museumPanel.title.Text = T("museum_title", state.rank, state.tickets)
+		clearRows(museumPanel.list)
+		for index, order in ipairs(state.orders) do
+			if order.waiting then
+				addMuseumRow(index, T("order_waiting", timeLeft(order.left)), COLOR_MUTED)
+			else
+				local species = FishConfig.Species[order.species]
+				local stage = FishConfig.GrowthStages[order.stage]
+				local variantText = ""
+				if order.variant ~= "normal" then
+					variantText = " " .. FishConfig.Variants[order.variant].emoji .. Strings.variant(order.variant)
+				end
+				local left = species.emoji .. " " .. Strings.species(order.species) .. "\n"
+					.. T("order_line2", Strings.stage(stage.name), variantText, order.tickets, timeLeft(order.left))
+				local orderId = order.id
+				addMuseumRow(index, left, FishConfig.Rarities[species.rarity].color, if order.ready then T("order_show") else T("order_nofish"), order.ready, function()
+					Sfx.click()
+					if order.ready then
+						actionEvent:FireServer("fulfill", orderId)
+					else
+						showToast(T("toast_order_fail"))
+					end
+				end)
+			end
+		end
+
+		-- траты билетов в текущем аквариуме
+		local slots = tankSlots[currentTank] or FishConfig.START_SLOTS
+		local packItem = VC.Shop.rarepack
+		addMuseumRow(10, T("museum_shop_pack", packItem.price), COLOR_GOLD, T("shop_buy"), state.tickets >= packItem.price, function()
+			Sfx.click()
+			if state.tickets < packItem.price then
+				showToast(T("toast_tickets_need"))
+			elseif revealBusy then
+				return
+			else
+				actionEvent:FireServer("shop", "rarepack", currentTank)
+			end
+		end)
+		local extra = slots - FishConfig.MAX_SLOTS
+		local slotItem = VC.Shop.slot
+		if extra < 0 then
+			addMuseumRow(11, T("museum_shop_locked"), COLOR_MUTED)
+		elseif extra >= slotItem.maxBonus then
+			addMuseumRow(11, T("slots_max"), COLOR_MUTED)
+		else
+			local price = slotItem.price * (extra + 1)
+			addMuseumRow(11, T("museum_shop_slot", price), COLOR_GOLD, T("shop_buy"), state.tickets >= price, function()
+				Sfx.click()
+				if state.tickets < price then
+					showToast(T("toast_tickets_need"))
+				else
+					actionEvent:FireServer("shop", "slot", currentTank)
+				end
+			end)
+		end
+	end
+
+	museumButton.Activated:Connect(function()
+		Sfx.click()
+		refreshPanel()
+		museumPanel.overlay.Visible = true
+	end)
+
+	visitorsEvent.OnClientEvent:Connect(function(state)
+		if typeof(state) ~= "table" or typeof(state.orders) ~= "table" then
+			return
+		end
+		museum.state = state
+		museum.receivedAt = os.clock()
+		museumButton.Text = T("museum_btn", state.tickets)
+		local anyReady = false
+		for _, order in ipairs(state.orders) do
+			anyReady = anyReady or order.ready == true
+		end
+		museumDot.Visible = anyReady
+		local notice = state.notice
+		if typeof(notice) == "table" then
+			if notice.kind == "reward" then
+				Sfx.play("reward")
+				showToast(T("toast_ticket", notice.tickets or 0), COLOR_BUTTON, 3)
+				if notice.rankUp then
+					task.delay(2.2, function()
+						showToast(T("toast_rankup", notice.rank or 1), COLOR_BUTTON, 3)
+					end)
+				end
+			elseif notice.kind == "fail" then
+				showToast(if notice.reason == "tickets" then T("toast_tickets_need") elseif notice.reason == "slotlimit" then T("toast_slot_limit") else T("toast_order_fail"))
+			end
+		end
+		if museumPanel.overlay.Visible then
+			refreshPanel()
+		end
+	end)
+
+	-- пока окно открыто, раз в секунду обновляем таймеры гостей
+	task.spawn(function()
+		while true do
+			task.wait(1)
+			if museumPanel.overlay.Visible then
+				refreshPanel()
+			end
 		end
 	end)
 end

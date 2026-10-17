@@ -82,6 +82,12 @@
         },
         "SetsChanged": {
           "$className": "RemoteEvent"
+        },
+        "VisitorsState": {
+          "$className": "RemoteEvent"
+        },
+        "VisitorAction": {
+          "$className": "RemoteEvent"
         }
       }
     },
@@ -111,6 +117,9 @@
       },
       "Merge": {
         "$path": "src/ServerScriptService/Merge.luau"
+      },
+      "Visitors": {
+        "$path": "src/ServerScriptService/Visitors.luau"
       }
     },
     "ServerStorage": {

@@ -358,6 +358,81 @@ return function()
 	Collection.sync(sp3)
 	check("синхронизация записывает рыб в память", sp3.seen["guppy/golden"] == true and sp3.seen["clown/normal"] == true)
 
+	-- ===== Музей: посетители, заказы, билеты =====
+	local Visitors = require(ServerScriptService.Visitors)
+	local VC = FishConfig.Visitors
+	local function museumProfile(fish)
+		return { coins = 0, nextFishId = 1, tanks = { lagoon = { slots = 10, fish = fish or {} } }, discovered = {}, seen = {}, speciesStats = {} }
+	end
+	local vp = museumProfile()
+	local T0 = 1000000
+	check("музей: очередь создаётся из 3 заказов", Visitors.refresh(vp, T0, Random.new(1)) == true and #vp.visitors.slots == VC.QUEUE_SIZE)
+	local allOrders, distinct, onlyOpenTanks = true, {}, true
+	for _, slot in ipairs(vp.visitors.slots) do
+		allOrders = allOrders and slot.species ~= nil
+		distinct[slot.species] = true
+		onlyOpenTanks = onlyOpenTanks and FishConfig.Species[slot.species].tank == "lagoon"
+	end
+	local distinctCount = 0
+	for _ in pairs(distinct) do
+		distinctCount += 1
+	end
+	check("музей: все места заняты, виды разные, только из открытых аквариумов", allOrders and distinctCount == 3 and onlyOpenTanks)
+	check("музей: ранг 1 — только обычные/редкие, без золотых, стадия 1", (function()
+		for _, slot in ipairs(vp.visitors.slots) do
+			local rarity = FishConfig.Species[slot.species].rarity
+			if (rarity ~= "common" and rarity ~= "rare") or slot.variant ~= "normal" or slot.stage ~= 1 then
+				return false
+			end
+		end
+		return true
+	end)())
+	check("музей: повторный refresh ничего не меняет", Visitors.refresh(vp, T0 + 1, Random.new(2)) == false)
+
+	local order1 = vp.visitors.slots[1]
+	local okNo, whyNo = Visitors.fulfill(vp, order1.id, T0 + 5)
+	check("показ без подходящей рыбы отклоняется", okNo == false and whyNo == "nofish" and vp.visitors.tickets == 0)
+	table.insert(vp.tanks.lagoon.fish, { id = 1, species = order1.species, variant = "normal", born = T0, earned = 0 })
+	local okYes, info = Visitors.fulfill(vp, order1.id, T0 + 10)
+	check("показ рыбы даёт билеты, рыба остаётся", okYes == true and info.tickets == order1.tickets and vp.visitors.tickets == order1.tickets and #vp.tanks.lagoon.fish == 1)
+	check("показ: заказ выполняется один раз", Visitors.fulfill(vp, order1.id, T0 + 11) == false)
+	check("после показа место ждёт нового гостя", vp.visitors.slots[1].species == nil and vp.visitors.slots[1].waitUntil == T0 + 10 + VC.REFILL_DELAY)
+	Visitors.refresh(vp, T0 + 20, Random.new(3))
+	check("новый гость не приходит раньше срока", vp.visitors.slots[1].species == nil)
+	Visitors.refresh(vp, T0 + 10 + VC.REFILL_DELAY, Random.new(3))
+	check("через REFILL_DELAY приходит новый гость", vp.visitors.slots[1].species ~= nil)
+
+	-- просроченный заказ заменяется без штрафа
+	local ticketsBefore = vp.visitors.tickets
+	local expiredId = vp.visitors.slots[2].id
+	Visitors.refresh(vp, vp.visitors.slots[2].expires + 1, Random.new(4))
+	check("просроченный заказ заменяется новым, билеты не отнимаются", vp.visitors.slots[2].id ~= expiredId and vp.visitors.slots[2].species ~= nil and vp.visitors.tickets == ticketsBefore)
+
+	-- требования: стадия и цвет
+	local sp = museumProfile({ { id = 1, species = "guppy", variant = "normal", born = T0, earned = 0 } })
+	local needAdult = { species = "guppy", stage = 3, variant = "normal" }
+	local needGolden = { species = "guppy", stage = 1, variant = "golden" }
+	check("малёк не подходит под заказ «взрослая»", Visitors.matchingFish(sp, needAdult, T0 + 10) == nil)
+	check("взрослая рыба подходит", Visitors.matchingFish(sp, needAdult, T0 + 1800) ~= nil)
+	check("обычная не подходит под заказ «золотая»", Visitors.matchingFish(sp, needGolden, T0 + 10) == nil)
+	sp.tanks.lagoon.fish[1].variant = "rainbow"
+	check("радужная подходит под заказ «золотая» (цвет не хуже)", Visitors.matchingFish(sp, needGolden, T0 + 10) ~= nil)
+
+	-- ранг и награда
+	check("ранги по порогам выполненных заказов", Visitors.rank(0) == 1 and Visitors.rank(4) == 1 and Visitors.rank(5) == 2 and Visitors.rank(15) == 3 and Visitors.rank(500) == #VC.RankThresholds)
+	check("награда растёт с редкостью, стадией и цветом", Visitors.reward("guppy", 1, "normal", 1) == 2 and Visitors.reward("octopus", 3, "golden", 1) > Visitors.reward("octopus", 1, "normal", 1) and Visitors.reward("guppy", 1, "normal", 6) > 2)
+	local hp = museumProfile()
+	hp.visitors = { tickets = 0, completed = 200, nextId = 1, slots = {} }
+	Visitors.refresh(hp, T0, Random.new(7))
+	local advancedOk = true
+	for _, slot in ipairs(hp.visitors.slots) do
+		advancedOk = advancedOk and slot.species ~= nil and slot.stage >= 1 and slot.stage <= 3 and FishConfig.Variants[slot.variant] ~= nil
+	end
+	check("на высоком ранге заказы валидны", advancedOk)
+	local summary = Visitors.summary(vp, T0 + 30)
+	check("сводка для клиента: билеты, ранг и 3 строки очереди", summary.tickets == vp.visitors.tickets and summary.rank == 1 and #summary.orders == 3 and summary.nextRankAt == 5)
+	check("траты билетов: хватает/не хватает", Visitors.spend(vp, vp.visitors.tickets + 1) == false and Visitors.spend(vp, 1) == true and Visitors.spend(vp, 0) == false)
+
 	-- ===== Конфиг =====
 	for packId, pack in pairs(FishConfig.Packs) do
 		local sum = 0
