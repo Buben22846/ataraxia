@@ -10,6 +10,7 @@ BAS = ["#4E4247", "#3A3136", "#2B2428", "#1C1719"]  # базальт: свет, 
 FAR = "#4F2019"                                     # дальний план (чуть светлее воды внизу)
 LAVA = ["#C8381C", "#FF6A2A", "#FFA23C", "#FFD684"]
 ASH, ASH_D = "#C99580", "#8F5B4B"
+WARM = "#7A4034"
 
 # ---------- вода ----------
 t = 5.0 * (YY / (H - 1)) ** 1.1 + 0.5 * ((XX - 67) / 67.0) ** 2
@@ -23,37 +24,34 @@ for x0, slope, hw in [(22, 0.30, 3.0), (62, 0.24, 3.8), (104, 0.18, 3.0)]:
 c = Canvas(quantize(t, WATER, 0.55))
 
 # ---------- лава: сначала маска, чтобы получить свечение ----------
-lava = np.zeros((H, W), dtype=np.uint8)  # 0 нет, 1 край, 2 тело, 3 жар
-def crack(x, y, steps, ang, wid=1):
-    pts = []
+body_im = Image.new("L", (W, H), 0)
+core_im = Image.new("L", (W, H), 0)
+bd, cd = ImageDraw.Draw(body_im), ImageDraw.Draw(core_im)
+def crack(x, y, steps, ang, wid):
+    pts = [(x, y)]
     for i in range(steps):
-        ang += rng.uniform(-0.55, 0.55)
-        x += math.cos(ang) * 2.2
-        y += math.sin(ang) * 0.9
+        ang += rng.uniform(-0.6, 0.6)
+        ang = max(-0.7, min(0.7, ang)) if abs(math.cos(ang)) < 0.3 else ang
+        x += math.cos(ang) * 3.0
+        y += math.sin(ang) * 1.3
         pts.append((x, y))
-        if rng.random() < 0.09 and wid > 0:
-            crack(x, y, rng.randrange(5, 12), ang + rng.choice((-1, 1)) * 0.9, 0)
-    for (px_, py_) in pts:
-        for dy in range(-wid, wid + 1):
-            xi, yi = int(px_), int(py_) + dy
-            if 0 <= xi < W and 0 <= yi < H:
-                lava[yi, xi] = max(lava[yi, xi], 2 if wid else 1)
-for x0, y0, a in [(-4, 228, 0.1), (40, 233, -0.2), (95, 225, 0.2), (70, 237, 3.1), (10, 214, 0.3), (118, 214, -0.4)]:
-    crack(x0, y0, 22, a, 1)
-# маленькие лужицы лавы по краям
-for cx, cy, rx, ry in [(14, 232, 7, 2), (122, 231, 8, 2), (60, 236, 5, 1)]:
-    for y in range(cy - ry, cy + ry + 1):
-        for x in range(cx - rx, cx + rx + 1):
-            if ((x - cx) / rx) ** 2 + ((y - cy) / max(ry, 1)) ** 2 <= 1 and 0 <= y < H and 0 <= x < W:
-                lava[y, x] = 2
-core = lava > 0
-g = blur(core.astype(float), 6) * 5.0
-g2 = blur(core.astype(float), 14) * 3.0
-glow = np.clip(g + g2, 0, 1.6) * np.clip((YY - 150) / 70.0, 0.15, 1.0)
-gi = np.clip(np.floor(glow * 3.4 + BT - 0.3), 0, 3).astype(int)
+        if rng.random() < 0.12 and wid > 2:
+            crack(x, y, rng.randrange(4, 9), ang + rng.choice((-1, 1)) * 0.9, 2)
+    bd.line([(round(a), round(b)) for a, b in pts], fill=255, width=wid)
+    cd.line([(round(a), round(b)) for a, b in pts], fill=255, width=1)
+for x0, y0, a in [(-4, 226, 0.1), (36, 231, -0.25), (92, 224, 0.2), (80, 236, 3.1), (4, 213, 0.35), (122, 214, 3.4), (130, 232, 3.2), (50, 238, -0.1)]:
+    crack(x0, y0, 16, a, 3)
+for cx, cy, rx, ry in [(14, 233, 8, 3), (121, 232, 9, 3)]:
+    bd.ellipse([cx - rx, cy - ry, cx + rx, cy + ry], fill=255)
+    cd.ellipse([cx - rx + 2, cy - ry + 1, cx + rx - 2, cy + ry - 1], fill=255)
+body = np.array(body_im) > 0
+corem = np.array(core_im) > 0
+core = body
+g = blur(core.astype(float), 5) * 6.0
+g2 = blur(core.astype(float), 13) * 5.0
+glow = np.clip(g + g2, 0, 2.2) * np.clip((YY - 150) / 60.0, 0.1, 1.0)
+gi = np.clip(np.floor(glow * 3.2 + BT * 0.9), 0, 3).astype(int)
 px = c.arr()
-for k in range(1, 4):
-    pass
 for k, col in enumerate(GLOW, start=1):
     px[(gi >= k)] = rgb(col)
 c.img.paste(Image.fromarray(px, "RGB"))
@@ -95,9 +93,43 @@ cluster([(93, 98), (99, 103)], [205, 198])
 
 # затемнение вершин дальше от дна (уходят в воду)
 fade = np.clip((190 - YY) / 80.0, 0, 1) * 0.55
-c.dmask(fade, WATER[3], region=((XX < 33) | (XX > 102)) & (YY < 195))
+px = c.arr()
+isb = np.zeros((H, W), bool)
+for col in BAS:
+    isb |= (px == np.array(rgb(col))).all(axis=2)
+c.dmask(fade, WATER[3], region=isb & (YY < 195))
+# тёплый отсвет лавы на основании столбов
+px = c.arr()
+isb = np.zeros((H, W), bool)
+for col in BAS[:3]:
+    isb |= (px == np.array(rgb(col))).all(axis=2)
+wg = np.clip(blur(body.astype(float), 9) * 9.0 - 0.15, 0, 1) * np.clip((YY - 140) / 60.0, 0, 1)
+c.dmask(wg, WARM, region=isb)
+
+# своды: висящие базальтовые столбы по краям
+def hang(x0, x1, ybot):
+    w = x1 - x0 + 1
+    for x in range(x0, x1 + 1):
+        f = (x - x0) / max(w - 1, 1)
+        c.rect(x, 0, x, ybot, BAS[2] if f < 0.6 else BAS[3])
+    c.line(x0, 0, x0, ybot - 1, BAS[1])
+    c.poly([(x0, ybot), (x0 + 1, ybot + 2), (x1 - 1, ybot + 2), (x1, ybot)], BAS[2])
+    for y in range(8, ybot, 9):
+        c.pt(x0 + w // 2, y, BAS[3])
+for a_, b_, h_ in [(0, 10, 48), (11, 17, 28), (18, 23, 14), (111, 117, 18), (118, 125, 36), (126, 134, 54)]:
+    hang(a_, b_, h_)
+# мягкая тень вокруг сводов (дизеринг тянется от столбов)
+hm = np.zeros((H, W))
+for a_, b_, h_ in [(0, 10, 48), (11, 17, 28), (18, 23, 14), (111, 117, 18), (118, 125, 36), (126, 134, 54)]:
+    hm[: h_ + 3, a_:b_ + 1] = 1
+px = c.arr()
+notcol = np.ones((H, W), bool)
+for col in BAS:
+    notcol &= ~(px == np.array(rgb(col))).all(axis=2)
+c.dmask(np.clip(blur(hm, 7) * 2.2, 0, 1), WATER[4], region=notcol & (YY < 90))
 
 # ---------- дно ----------
+
 fy = np.array([214 + 2.5 * math.sin(x / 7.0) + 1.5 * math.sin(x / 2.9) - 9 * edge(x) ** 2.5 for x in range(W)])
 below = YY - fy[XX]
 tt = np.clip(below / 12.0, 0, 3.0)
@@ -113,20 +145,16 @@ for cx, cy, rx, ry in [(46, 216, 7, 4), (88, 218, 8, 4), (66, 230, 6, 3)]:
     c.ell(cx, cy, rx, ry, BAS[2]); c.ell(cx - 1, cy - 1, rx - 2, ry - 2, BAS[1]); c.pt(cx - 3, cy - 2, BAS[0]); c.pt(cx - 2, cy - 3, BAS[0])
 
 # рисуем лаву поверх
+er = body.copy()
+er[1:-1, 1:-1] = body[1:-1, 1:-1] & body[:-2, 1:-1] & body[2:, 1:-1] & body[1:-1, :-2] & body[1:-1, 2:]
 px = c.arr()
-for y in range(H):
-    for x in range(W):
-        v = lava[y, x]
-        if v and (y >= fy[x] or y > 205):
-            px[y, x] = rgb(LAVA[1] if v == 2 else LAVA[0])
+vis = (YY >= fy[XX]) | (YY > 205)
+px[body & vis] = rgb(LAVA[0])
+px[er & vis] = rgb(LAVA[1])
+px[corem & er & vis] = rgb(LAVA[2])
+sp = corem & er & vis & ((XX * 5 + YY * 3) % 7 == 0)
+px[sp] = rgb(LAVA[3])
 c.img.paste(Image.fromarray(px, "RGB"))
-# жар в центре трещин
-for y in range(1, H - 1):
-    for x in range(1, W - 1):
-        if lava[y, x] == 2 and lava[y - 1, x] and lava[y + 1, x] and (x + y) % 2 == 0:
-            c.pt(x, y, LAVA[2])
-        if lava[y, x] == 2 and lava[y, x - 1] and lava[y, x + 1] and lava[y - 1, x] and lava[y + 1, x] and (x * 3 + y) % 5 == 0:
-            c.pt(x, y, LAVA[3])
 
 # ---------- пузырьки и пепел ----------
 for x, y in [(8, 205), (12, 188), (11, 170), (14, 150), (125, 200), (120, 178), (123, 160), (118, 140), (30, 206), (36, 194), (100, 208), (96, 190)]:

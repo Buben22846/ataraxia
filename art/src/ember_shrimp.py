@@ -13,36 +13,35 @@ WHITE = "#ffffff"
 
 g = Grid()
 # усики и ножки (сзади)
-g.line(26, 11, 30, 3, FIN)
-g.line(27, 13, 31, 8, FIN)
-for x in (13, 16, 19, 22):
-    g.line(x, 18, x - 1, 22, FIN)
+g.line(19, 8, 23, 2, FIN)
+g.line(20, 10, 24, 6, FIN)
+for x in (9, 12, 15):
+    g.line(x, 13, x - 1, 16, FIN)
 # хвостовой веер
-g.poly([(9, 23), (3, 22), (1, 26), (5, 29), (10, 27)], FIN)
-g.poly([(8, 24), (4, 24), (3, 26), (6, 27)], SHADE)
+g.poly([(6, 17), (2, 16), (1, 20), (4, 22), (8, 20)], FIN)
+g.poly([(5, 18), (3, 18), (3, 20), (5, 20)], SHADE)
 # сегменты тела по дуге
-g.ellipse(24, 15, 4, 4, BASE)       # голова
-g.ellipse(19, 11, 4, 4, BASE)
-g.ellipse(14, 12, 4, 4, BASE)
-g.ellipse(10, 16, 3, 4, BASE)
-g.ellipse(9, 21, 3, 3, BASE)
-g.poly([(26, 11), (29, 12), (27, 14)], BASE)  # рострум
+g.ellipse(18, 11, 3, 3, BASE)       # голова
+g.ellipse(14, 8, 3, 3, BASE)
+g.ellipse(10, 9, 3, 3, BASE)
+g.ellipse(7, 12, 2, 3, BASE)
+g.ellipse(6, 16, 2, 2, BASE)
+g.poly([(19, 7), (22, 8), (20, 10)], BASE)  # рострум
 # блик сверху и тень снизу
-for cx, cy, r in ((19, 11, 4), (14, 12, 4), (10, 16, 3)):
-    g.ellipse(cx - 1, cy - 2, r - 1, 0, LIGHT, only_where="filled")
-g.ellipse(24, 12, 3, 0, LIGHT, only_where="filled")
-for cx, cy, r in ((19, 11, 4), (14, 12, 4), (24, 15, 4)):
-    g.ellipse(cx, cy + 4, r - 1, 0, SHADE, only_where="filled")
-g.line(7, 17, 7, 22, SHADE); g.line(8, 23, 11, 22, SHADE)
+for cx, cy in ((14, 8), (10, 9), (7, 12)):
+    g.ellipse(cx - 1, cy - 2, 2, 0, LIGHT, only_where="filled")
+g.ellipse(18, 8, 2, 0, LIGHT, only_where="filled")
+for cx, cy in ((14, 8), (10, 9), (18, 11), (6, 16)):
+    g.ellipse(cx, cy + 3, 2, 0, SHADE, only_where="filled")
 # светящиеся сегменты
-g.line(16, 8, 16, 14, GLOW)
-g.line(21, 8, 21, 13, GLOW)
-g.line(11, 12, 12, 13, GLOW)
-g.line(8, 17, 11, 17, GLOW)
-g.line(8, 21, 11, 21, GLOW)
+g.line(12, 6, 12, 10, GLOW)
+g.line(16, 6, 16, 9, GLOW)
+g.line(8, 10, 9, 11, GLOW)
+g.line(5, 13, 8, 13, GLOW)
+g.line(5, 16, 8, 16, GLOW)
 # глаз
-g.rect(25, 13, 26, 14, WHITE)
-g.set(26, 14, OUT)
+g.rect(18, 9, 19, 10, WHITE)
+g.set(19, 10, OUT)
 g.outline(OUT)
 g.recenter()
 

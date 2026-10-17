@@ -9,6 +9,12 @@
         "$className": "Folder",
         "FishConfig": {
           "$path": "src/ReplicatedStorage/Shared/FishConfig.luau"
+        },
+        "Sprites": {
+          "$path": "src/ReplicatedStorage/Shared/Sprites.luau"
+        },
+        "SpriteData": {
+          "$path": "src/ReplicatedStorage/Shared/SpriteData.luau"
         }
       },
       "Remotes": {
