@@ -99,7 +99,12 @@ local function makeImage(parent, id, zIndex)
 	label.BackgroundTransparency = 1
 	label.BorderSizePixel = 0
 	label.Size = UDim2.fromScale(1, 1)
-	label.ZIndex = zIndex
+	-- zIndex здесь — сдвиг относительно слоя самого элемента: скин рисуется ровно на его уровне
+	-- (иначе рамка окажется под затемнением и другими окнами) и следует за ним, если слой изменят
+	label.ZIndex = parent.ZIndex + zIndex
+	parent:GetPropertyChangedSignal("ZIndex"):Connect(function()
+		label.ZIndex = parent.ZIndex + zIndex
+	end)
 	label.Active = false
 	if not Sprites.apply(label, id, false) then
 		label:Destroy()
@@ -113,7 +118,7 @@ end
 -- Панель или строка: Frame с пиксельной рамкой. Дети с ZIndex выше 1 рисуются поверх картинки.
 function UIKit.frame(frame, id)
 	local ok, result = pcall(function()
-		local label = makeImage(frame, id or "ui_panel", 1)
+		local label = makeImage(frame, id or "ui_panel", 0)
 		if label == nil then
 			return false
 		end
@@ -131,7 +136,7 @@ local function skinText(button, fixedLook)
 	end
 	local ok, result = pcall(function()
 		local look = fixedLook or lookFor(button.BackgroundColor3)
-		local image = makeImage(button, look.up, 1)
+		local image = makeImage(button, look.up, 0)
 		if image == nil then
 			return false
 		end
@@ -144,7 +149,10 @@ local function skinText(button, fixedLook)
 		text.Size = UDim2.fromScale(textScale or 1, 1)
 		text.AnchorPoint = if textScale then Vector2.new(0.5, 0.5) else Vector2.zero
 		text.Position = basePosition
-		text.ZIndex = 2
+		text.ZIndex = button.ZIndex + 1
+		button:GetPropertyChangedSignal("ZIndex"):Connect(function()
+			text.ZIndex = button.ZIndex + 1
+		end)
 		text.Active = false
 		text.Font = button.Font
 		pcall(function()
