@@ -442,6 +442,25 @@ return function()
 	check("число: отрицательные", Strings.num(-1500) == "-1.5K")
 	check("текст с числом от 1000 сокращается, от 999 — нет", Strings.t("coins", 1500) == "1.5K" and Strings.t("coins", 999) == "999")
 
+	-- ===== Экономическая аналитика =====
+	local Telemetry = require(ServerScriptService.Telemetry)
+	local sent = {}
+	Telemetry._setSender(function(_, flow, amount, balance, txType, sku)
+		table.insert(sent, { flow = flow, amount = amount, balance = balance, txType = txType, sku = sku })
+	end)
+	local fakePlayer = {}
+	Telemetry.sink(fakePlayer, 50, 10, Telemetry.TxType.Shop, "pack_lagoon")
+	Telemetry.source(fakePlayer, 0, 10, Telemetry.TxType.Gameplay, "x")
+	check("аналитика: трата отправлена как sink, нулевая сумма пропущена", #sent == 1 and sent[1].flow == "sink" and sent[1].amount == 50 and sent[1].sku == "pack_lagoon")
+	Telemetry.addIncome(fakePlayer, "fish_income", 3)
+	Telemetry.addIncome(fakePlayer, "fish_income", 4)
+	check("аналитика: доход копится без отправки", #sent == 1 and Telemetry.pendingFor(fakePlayer).fish_income == 7)
+	Telemetry.flush(fakePlayer, 99)
+	check("аналитика: flush шлёт одно событие с суммой и балансом", #sent == 2 and sent[2].flow == "source" and sent[2].amount == 7 and sent[2].balance == 99 and Telemetry.pendingFor(fakePlayer) == nil)
+	Telemetry.flush(fakePlayer, 99)
+	check("аналитика: повторный flush ничего не шлёт", #sent == 2)
+	Telemetry._setSender(nil)
+
 	-- ===== Конфиг =====
 	for packId, pack in pairs(FishConfig.Packs) do
 		local sum = 0

@@ -15,6 +15,7 @@ local AnalyticsService = game:GetService("AnalyticsService")
 local MarketplaceService = game:GetService("MarketplaceService")
 local PolicyService = game:GetService("PolicyService")
 local Shop = require(ServerScriptService:WaitForChild("Shop"))
+local Telemetry = require(ServerScriptService:WaitForChild("Telemetry"))
 local Collection = require(ServerScriptService:WaitForChild("Collection"))
 local Merge = require(ServerScriptService:WaitForChild("Merge"))
 local Visitors = require(ServerScriptService:WaitForChild("Visitors"))
@@ -264,6 +265,7 @@ local function onPlayerAdded(player)
 	profile.lastSeen = now
 	if gained > 0 then
 		pendingOffline[player] = gained
+		Telemetry.source(player, gained, profile.coins, Telemetry.TxType.Gameplay, "offline_income")
 	end
 	loaded[player] = true
 	trackStep(player, 1)
@@ -279,6 +281,13 @@ local function onPlayerRemoving(player)
 	pendingOffline[player] = nil
 	funnelSent[player] = nil
 	hasDoubleCoins[player] = nil
+	do
+		local leaving = PlayerData.get(player)
+		if leaving ~= nil then
+			Telemetry.flush(player, leaving.coins)
+		end
+		Telemetry.forget(player)
+	end
 	PlayerData.release(player) -- финальное сохранение и снятие блокировки
 end
 
@@ -329,6 +338,7 @@ openPackEvent.OnServerEvent:Connect(function(player, packId)
 	end
 
 	profile.coins -= pack.price
+	Telemetry.sink(player, pack.price, profile.coins, Telemetry.TxType.Shop, "pack_" .. packId)
 
 	local speciesId, rarity = PackRoller.roll(pack)
 	local fishId = profile.nextFishId
@@ -471,6 +481,7 @@ claimDailyEvent.OnServerEvent:Connect(function(player)
 	if reward == nil then
 		return
 	end
+	Telemetry.source(player, reward, profile.coins, Telemetry.TxType.TimedReward, "daily_reward")
 	trackStep(player, 4)
 	sendCoins(player, profile)
 	dailyStateEvent:FireClient(player, DailyReward.state(profile, os.time()))
@@ -531,6 +542,7 @@ buySlotEvent.OnServerEvent:Connect(function(player, tankId)
 	end
 
 	profile.coins -= price
+	Telemetry.sink(player, price, profile.coins, Telemetry.TxType.Shop, "slot_" .. tankId)
 	tankData.slots += 1
 	print(player.Name, "купил место в", tankId, "всего мест:", tankData.slots, "монет:", profile.coins)
 	sendCoins(player, profile)
@@ -560,6 +572,7 @@ buyTankEvent.OnServerEvent:Connect(function(player, tankId)
 	end
 
 	profile.coins -= def.price
+	Telemetry.sink(player, def.price, profile.coins, Telemetry.TxType.Shop, "tank_" .. tankId)
 	profile.tanks[tankId] = FishConfig.newTank()
 	print(player.Name, "открыл аквариум", tankId, "монет:", profile.coins)
 	trackStep(player, 5)
@@ -593,6 +606,7 @@ sellFishEvent.OnServerEvent:Connect(function(player, fishId)
 				local price = FishConfig.sellPriceOf(fish.species, fish.variant, os.time() - fish.born)
 				table.remove(tankData.fish, index)
 				profile.coins += price
+				Telemetry.source(player, price, profile.coins, Telemetry.TxType.Shop, "sell_fish")
 				sendCoins(player, profile)
 				sendFish(player, profile)
 				return
@@ -708,18 +722,34 @@ MarketplaceService.ProcessReceipt = function(receiptInfo)
 	if profile == nil then
 		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
+	local coinsBefore = profile.coins
 	local result = Shop.grant(profile, receiptInfo.ProductId, tostring(receiptInfo.PurchaseId), os.time())
 	if result == "unknown" then
 		warn("[Shop] неизвестный товар", receiptInfo.ProductId)
 		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
 	if result == "granted" then
+		local product = Shop.productById(receiptInfo.ProductId)
+		Telemetry.source(player, profile.coins - coinsBefore, profile.coins, Telemetry.TxType.IAP, product and product.key or "coin_product")
 		-- Сразу сохраняем: деньги за Robux не должны потеряться при сбое сервера
 		task.spawn(PlayerData.save, player)
 		sendCoins(player, profile)
 	end
 	return Enum.ProductPurchaseDecision.PurchaseGranted
 end
+
+-- ===== Аналитика: раз в минуту отправляем накопленный доход рыб =====
+task.spawn(function()
+	while true do
+		task.wait(60)
+		for _, player in ipairs(Players:GetPlayers()) do
+			local profile = PlayerData.get(player)
+			if profile ~= nil then
+				Telemetry.flush(player, profile.coins)
+			end
+		end
+	end
+end)
 
 -- ===== Пассивный доход =====
 -- Каждая рыба приносит монеты; плюсуем и к статистике рыбы, и к статистике вида
@@ -729,7 +759,8 @@ task.spawn(function()
 		for _, player in ipairs(Players:GetPlayers()) do
 			local profile = PlayerData.get(player)
 			if profile ~= nil and Economy.fishCount(profile) > 0 then
-				Economy.applyIncome(profile, 1, os.time(), incomeMultiplier(player))
+				local earned = Economy.applyIncome(profile, 1, os.time(), incomeMultiplier(player))
+				Telemetry.addIncome(player, "fish_income", earned)
 				if ready[player] then
 					sendCoins(player, profile)
 					sendFish(player, profile)

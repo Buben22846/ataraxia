@@ -120,6 +120,9 @@
       },
       "Visitors": {
         "$path": "src/ServerScriptService/Visitors.luau"
+      },
+      "Telemetry": {
+        "$path": "src/ServerScriptService/Telemetry.luau"
       }
     },
     "ServerStorage": {
