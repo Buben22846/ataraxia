@@ -2,6 +2,7 @@
 import os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from pixel import Grid, save_sprite
+from _scale import SG
 
 OUT = "#1d2b3a"
 BODY = "#a3b5c5"
@@ -14,28 +15,28 @@ WHITE = "#ffffff"
 
 g = Grid()
 # задние ласты
-g.poly([(7, 17), (1, 13), (3, 18), (1, 23), (7, 20)], SHADE)
+g.poly([(6, 17), (1, 13), (3, 18), (1, 23), (6, 20)], SHADE)
 # тело
-g.ellipse(13, 18, 10, 6, BODY)
-g.ellipse(13, 14, 7, 1, LIGHT, only_where="filled")
-g.ellipse(13, 23, 8, 1, SHADE, only_where="filled")
+g.ellipse(11, 18, 8, 5, BODY)
+g.ellipse(11, 15, 6, 1, LIGHT, only_where="filled")
+g.ellipse(11, 22, 7, 1, SHADE, only_where="filled")
 # голова
-g.ellipse(22, 14, 6, 5, BODY)
-g.ellipse(21, 10, 4, 1, LIGHT, only_where="filled")
-g.ellipse(26, 17, 4, 3, MUZZ, only_where="filled")
+g.ellipse(18, 15, 5, 4, BODY)
+g.ellipse(17, 12, 3, 1, LIGHT, only_where="filled")
+g.ellipse(21, 17, 3, 2, MUZZ, only_where="filled")
 # пятна
-for x, y in ((8, 15), (11, 19), (14, 15), (16, 21), (5, 19)):
+for x, y in ((7, 16), (10, 19), (12, 16), (13, 21), (4, 19)):
     g.rect(x, y, x + 1, y, SPOT)
-g.set(9, 16, SPOT); g.set(12, 20, SPOT); g.set(15, 16, SPOT)
+g.set(8, 17, SPOT); g.set(11, 20, SPOT)
 # глаз большой чёрный
-g.rect(21, 12, 23, 14, OUT)
-g.set(21, 12, WHITE)
+g.rect(17, 13, 19, 15, OUT)
+g.set(17, 13, WHITE)
 # нос, усики, щека
-g.rect(27, 14, 28, 15, OUT)
-g.set(25, 18, SPOT); g.set(27, 18, SPOT); g.set(28, 17, SPOT)
-g.rect(20, 17, 21, 17, PINK)
+g.rect(22, 15, 23, 16, OUT)
+g.set(20, 18, SPOT); g.set(22, 18, SPOT); g.set(23, 17, SPOT)
+g.rect(16, 17, 17, 17, PINK)
 # передний ласт
-g.poly([(15, 19), (12, 24), (16, 25), (19, 21)], SHADE)
+g.poly([(12, 19), (10, 24), (13, 24), (16, 21)], SHADE)
 g.outline(OUT)
 g.recenter()
 

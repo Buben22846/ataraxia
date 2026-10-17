@@ -2,6 +2,7 @@
 import os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from pixel import Grid, save_sprite
+from _scale import SG
 
 OUT = "#1d2b3a"
 BODY = "#6b8cad"
@@ -13,7 +14,7 @@ BELLYS = "#bcd9e8"
 PINK = "#f4a6b8"
 WHITE = "#ffffff"
 
-g = Grid()
+g = SG(0.94)
 # хвост-полумесяц
 g.poly([(8, 15), (2, 6), (4, 14), (3, 19), (7, 25), (8, 17)], FIN)
 # спинной и грудной плавники

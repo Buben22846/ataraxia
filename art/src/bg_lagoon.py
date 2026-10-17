@@ -5,7 +5,7 @@ from bgkit import *
 
 rng = random.Random(11)
 WATER = ["#5CC0C4", "#3CA4B4", "#2488A6", "#146E8C", "#10607C", "#0C506A"]
-FAR_A, FAR_B = "#16627F", "#0F5672"
+FAR_A, FAR_B = "#1B7390", "#12607C"
 SAND = ["#F0D9A4", "#DCBF86", "#BD9E6A", "#8F7A57"]
 PINK, PINK_D = "#E8728A", "#B9486A"
 ORG, ORG_D = "#F5A25C", "#C86B3C"
@@ -15,14 +15,14 @@ PALE, GOLD = "#D6F4EE", "#F5C84A"
 
 # ---------- вода + лучи ----------
 t = 5.0 * (YY / (H - 1)) ** 0.95 + 0.55 * ((XX - 67) / 67.0) ** 2
-t -= 1.5 * np.clip((0.16 - YY / H) / 0.16, 0, 1)
-for x0, slope, hw in [(18, 0.34, 4.0), (46, 0.30, 5.5), (74, 0.26, 4.5), (101, 0.22, 6.0), (128, 0.18, 4.0), (-4, 0.36, 3.5)]:
+t += 1.0 - 1.0 * np.clip(YY / (0.12 * H), 0, 1) * 0 - 1.0 * np.clip(YY / (0.10 * H), 0, 1)
+for x0, slope, hw in [(8, 0.42, 2.2), (40, 0.38, 3.2), (76, 0.33, 2.4), (108, 0.28, 3.4), (140, 0.2, 2.2)]:
     cx = x0 + slope * YY
     half = hw + YY * 0.07
-    soft = np.clip(1 - np.abs(XX - cx) / half, 0, 1)
-    fade = np.clip(1 - YY / (0.40 * H), 0, 1) ** 1.3
-    t -= 1.5 * soft * fade
-c = Canvas(quantize(t, WATER, 0.85))
+    soft = np.clip(1 - np.abs(XX - cx) / half, 0, 1) ** 0.6
+    fade = np.clip(1 - YY / (0.36 * H), 0, 1) ** 1.3
+    t -= 1.6 * soft * fade
+c = Canvas(quantize(t, WATER, 0.55))
 
 # поверхность: блики-рябь
 for x in range(0, W):
@@ -130,24 +130,24 @@ def star(cx, cy, col):
 
 SY = lambda x: round(sy[min(max(x, 0), W - 1)])
 # левый кластер
-weed(4, SY(4) + 1, 70, 5, 0.5, 2)
+weed(3, SY(3) + 1, 86, 5, 0.5, 3)
 weed(10, SY(10) + 1, 46, 4, 2.0, 2, True)
 weed(17, SY(17) + 1, 58, 5, 1.0, 2)
-brain(26, SY(26) - 2, 9, ORG, ORG_D, SAND[0])
-branch(14, SY(14) + 1, math.radians(80), 11, 3, PINK, PINK_D, PALE)
-branch(33, SY(33) + 2, math.radians(95), 10, 3, PUR, PUR_D, PALE)
-fan(6, SY(6) - 1, 17, PINK, PINK_D)
-tubes(37, SY(37) + 1, 3, ORG, ORG_D, GOLD)
+brain(27, SY(27) - 2, 12, ORG, ORG_D, SAND[0])
+branch(15, SY(15) + 1, math.radians(80), 15, 4, PINK, PINK_D, PALE)
+branch(34, SY(34) + 2, math.radians(95), 14, 4, PUR, PUR_D, PALE)
+fan(7, SY(7) - 1, 24, PINK, PINK_D)
+tubes(40, SY(40) + 1, 4, ORG, ORG_D, GOLD)
 star(21, SY(21) + 4, ORG)
 # правый кластер
-weed(130, SY(130) + 1, 74, 5, 2.5, 2)
+weed(131, SY(131) + 1, 90, 5, 2.5, 3)
 weed(122, SY(122) + 1, 50, 4, 0.2, 2, True)
 weed(113, SY(113) + 1, 40, 4, 3.3, 2)
-brain(106, SY(106) - 2, 8, PUR, PUR_D, SAND[0])
-branch(120, SY(120) + 1, math.radians(100), 12, 3, ORG, ORG_D, PALE)
-branch(97, SY(97) + 2, math.radians(85), 9, 3, PINK, PINK_D, PALE)
-fan(128, SY(128) - 1, 15, PUR, PUR_D)
-tubes(92, SY(92) + 1, 3, PINK, PINK_D, PALE)
+brain(106, SY(106) - 3, 11, PUR, PUR_D, SAND[0])
+branch(119, SY(119) + 1, math.radians(100), 16, 4, ORG, ORG_D, PALE)
+branch(98, SY(98) + 2, math.radians(85), 13, 4, PINK, PINK_D, PALE)
+fan(128, SY(128) - 1, 22, PUR, PUR_D)
+tubes(88, SY(88) + 1, 4, PINK, PINK_D, PALE)
 star(112, SY(112) + 5, PINK)
 # редкая мелочь в центре дна
 weed(60, SY(60) + 1, 12, 2, 0.3, 1)

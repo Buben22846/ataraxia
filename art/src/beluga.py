@@ -2,6 +2,7 @@
 import os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from pixel import Grid, save_sprite
+from _scale import SG
 
 OUT = "#1d2b3a"
 WHITE = "#ffffff"
@@ -12,7 +13,7 @@ FIN = "#a3c8dc"
 TURQ = "#6fcfd0"
 PINK = "#f4a6b8"
 
-g = Grid()
+g = SG(0.96)
 # хвост: стебель и две доли плавника
 g.poly([(11, 16), (6, 13), (6, 17), (11, 22)], BODY)
 g.poly([(7, 14), (3, 6), (1, 8), (2, 13)], SHADE2)

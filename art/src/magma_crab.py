@@ -13,31 +13,31 @@ CLAW = "#c23a22"
 WHITE = "#ffffff"
 
 g = Grid()
-# ноги
-for x in (3, 8, 13, 18):
-    g.poly([(x + 2, 21), (x + 4, 21), (x + 2, 27), (x - 1, 27)], SHADE)
-    g.rect(x - 1, 27, x + 2, 27, BASE)
-    g.line(x + 3, 21, x + 3, 22, BASE)
+# ноги: 4 отдельные, с изгибом и просветами
+for x, o in ((4, -3), (9, -1), (14, 1), (19, 3)):
+    g.line(x + 1, 20, x + 1 + o, 25, SHADE); g.line(x + 2, 20, x + 2 + o, 25, SHADE)
+    g.line(x + 1 + o, 25, x + 1 + o + o // 3 * 0 + (1 if o > 0 else -1), 28, BASE)
+    g.line(x + 2 + o, 25, x + 2 + o + (1 if o > 0 else -1), 28, BASE)
 # рука и клешня (поднята)
-g.poly([(19, 18), (22, 19), (27, 14), (24, 12)], BASE)
-g.ellipse(26, 11, 3, 3, CLAW)
-g.poly([(22, 10), (22, 2), (25, 8)], CLAW)      # левый палец
-g.poly([(28, 8), (31, 2), (31, 11)], CLAW)      # правый палец
-g.ellipse(25, 9, 1, 1, "#e8622f", only_where="filled")
-g.line(26, 12, 28, 13, LAVA)
-g.set(22, 4, GLOW)
+g.poly([(20, 17), (23, 19), (27, 15), (24, 13)], BASE)
+g.ellipse(27, 12, 3, 3, CLAW)
+g.poly([(24, 10), (24, 4), (27, 9)], CLAW)      # левый палец
+g.poly([(29, 9), (31, 4), (32, 12)], CLAW)      # правый палец
+g.ellipse(26, 10, 1, 1, "#e8622f", only_where="filled")
+g.line(27, 13, 29, 14, LAVA)
+g.set(24, 5, GLOW)
 # панцирь
-g.ellipse(12, 18, 10, 6, BASE)
-g.ellipse(10, 14, 7, 1, LIGHT, only_where="filled")
-g.ellipse(12, 22, 9, 1, SHADE, only_where="filled")
+g.ellipse(12, 17, 10, 6, BASE)
+g.ellipse(10, 13, 7, 1, LIGHT, only_where="filled")
+g.ellipse(12, 21, 9, 1, SHADE, only_where="filled")
 # трещины лавы
-for p in ((3, 17, 6, 19), (6, 19, 9, 16), (9, 16, 12, 19), (12, 19, 15, 17), (15, 17, 17, 20), (9, 16, 9, 14)):
+for p in ((3, 16, 6, 18), (6, 18, 9, 15), (9, 15, 12, 18), (12, 18, 15, 16), (15, 16, 17, 19), (9, 15, 9, 13)):
     g.line(*p, LAVA)
-g.set(9, 16, GLOW); g.set(12, 19, GLOW); g.set(6, 19, GLOW); g.set(16, 19, GLOW)
+g.set(9, 15, GLOW); g.set(12, 18, GLOW); g.set(6, 18, GLOW); g.set(16, 17, GLOW)
 # глаз на стебельке
-g.line(17, 13, 18, 11, BASE)
-g.rect(17, 9, 18, 10, WHITE)
-g.set(18, 10, OUT)
+g.line(18, 12, 19, 10, BASE)
+g.rect(18, 8, 19, 9, WHITE)
+g.set(19, 9, OUT)
 g.outline(OUT)
 g.recenter()
 

@@ -4,8 +4,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from pixel import Grid, save_sprite
 
 OUT = "#1d2b3a"
-LIGHT = "#d9503a"
-BASE = "#a8321f"
+LIGHT = "#ee6b45"
+BASE = "#b73a2a"
 SHADE = "#6a1c22"
 FIN = "#c2412a"
 GLOW = "#ff9a3c"
