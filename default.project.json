@@ -15,6 +15,9 @@
         },
         "SpriteData": {
           "$path": "src/ReplicatedStorage/Shared/SpriteData.luau"
+        },
+        "SpriteAssets": {
+          "$path": "src/ReplicatedStorage/Shared/SpriteAssets.luau"
         }
       },
       "Remotes": {

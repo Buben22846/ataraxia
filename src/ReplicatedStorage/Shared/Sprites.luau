@@ -6,6 +6,7 @@
 local AssetService = game:GetService("AssetService")
 
 local SpriteData = require(script.Parent:WaitForChild("SpriteData"))
+local SpriteAssets = require(script.Parent:WaitForChild("SpriteAssets")) -- загруженные в Roblox картинки (если есть)
 
 local SYMBOLS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
@@ -73,6 +74,17 @@ end
 
 -- Ставит картинку в ImageLabel. Возвращает true, если получилось.
 function Sprites.apply(imageLabel, id, flip)
+	-- 1) Загруженная в Roblox картинка — самый надёжный вариант
+	local assetId = SpriteAssets[if flip then id .. ":flip" else id]
+	if assetId == nil and not flip then
+		assetId = SpriteAssets[id]
+	end
+	if assetId ~= nil and (not flip or SpriteAssets[id .. ":flip"] ~= nil) then
+		imageLabel.Image = assetId
+		imageLabel.ResampleMode = Enum.ResamplerMode.Pixelated
+		return true
+	end
+	-- 2) Рисуем сами через EditableImage
 	local content = Sprites.content(id, flip)
 	if content == nil then
 		return false
