@@ -82,6 +82,8 @@ local function newProfile()
 		tutorialDone = false, -- прошёл ли игрок обучение
 		settings = { sfx = true, music = true }, -- настройки звука игрока
 		receipts = { list = {}, seen = {} }, -- чеки покупок за Robux (чтобы не выдать товар дважды)
+		sessions = 0, -- сколько раз игрок заходил (стартовый набор предлагается со второй сессии)
+		starter = { offeredAt = 0, bought = false }, -- стартовый набор: когда предложили и куплен ли
 	}
 end
 

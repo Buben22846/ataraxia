@@ -149,8 +149,25 @@ FishConfig.VariantOrder = { "normal", "golden", "rainbow" }
 --   DoubleCoins.mult — во сколько раз растёт весь доход (и онлайн, и офлайн)
 --   Products[i].seconds — товар даёт монеты, равные столькому времени текущего дохода (но не меньше MIN_COINS),
 --   поэтому он честен и в начале игры, и в конце.
+--   NightWatch  — пасс Night Watchman: лимит дохода в офлайне растёт с OFFLINE_MAX до offlineMax секунд
+--   SecondHall  — пасс Second Hall: в очереди музея на extraQueue гостей больше
+--   QuickOpen   — пасс Quick Open: кнопка «×packs» открывает несколько паков сразу и без долгой анимации
+--   StarterPack — разовый товар, который предлагается во второй сессии на offerHours часов (реальный таймер): монеты за
+--                 seconds секунд дохода, билеты музея и заранее известная рыба fish. Никакого рандома.
+-- Пока passId / productId = 0, соответствующий товар не продаётся и не показывается.
 FishConfig.Shop = {
 	DoubleCoins = { passId = 2040116972, mult = 2 }, -- Poseidon's Blessing
+	NightWatch = { passId = 0, offlineMax = 12 * 3600 }, -- Night Watchman
+	SecondHall = { passId = 0, extraQueue = 3 }, -- Second Hall
+	QuickOpen = { passId = 0, packs = 3 }, -- Quick Open
+	StarterPack = {
+		key = "starter",
+		productId = 0, -- Starter Pack
+		seconds = 2 * 3600,
+		tickets = 10,
+		fish = { species = "puffer", variant = "golden", tank = "lagoon" },
+		offerHours = 24,
+	},
 	Products = {
 		{ key = "coins_1h", productId = 3719343518, seconds = 3600 }, -- Gift of Nereus (25 R$)
 		{ key = "coins_8h", productId = 3719343283, seconds = 28800 }, -- Handful of Pearls (50 R$)
@@ -255,8 +272,9 @@ function FishConfig.rollVariant(rng)
 end
 
 -- Сколько тиков дохода засчитать за elapsed секунд отсутствия (целое число)
-function FishConfig.offlineTicks(elapsed)
-	local capped = math.min(math.max(elapsed, 0), FishConfig.OFFLINE_MAX)
+-- maxSeconds — лимит накопления (по умолчанию OFFLINE_MAX; пасс Night Watchman поднимает его)
+function FishConfig.offlineTicks(elapsed, maxSeconds)
+	local capped = math.min(math.max(elapsed, 0), maxSeconds or FishConfig.OFFLINE_MAX)
 	return math.floor(capped / FishConfig.INCOME_INTERVAL * FishConfig.OFFLINE_RATE)
 end
 

@@ -48,7 +48,18 @@ local settingsEvent = remotes:WaitForChild("Settings")
 
 -- ===== Покупки за Robux =====
 -- Геймпасс «x2 монеты» проверяем у MarketplaceService при входе и после покупки; результат помним на сервере.
-local hasDoubleCoins = {} -- player -> true
+local passOwned = {} -- player -> { doubleCoins = true, nightWatch = true, secondHall = true, quickOpen = true }
+-- Какой пасс за что отвечает (id берём из FishConfig.Shop; пока id = 0, пасс не продаётся)
+local PASSES = {
+	doubleCoins = FishConfig.Shop.DoubleCoins,
+	nightWatch = FishConfig.Shop.NightWatch,
+	secondHall = FishConfig.Shop.SecondHall,
+	quickOpen = FishConfig.Shop.QuickOpen,
+}
+local function owns(player, key)
+	local owned = passOwned[player]
+	return owned ~= nil and owned[key] == true
+end
 -- Платный рандом (паки за монеты, а монеты продаются за Robux) ограничен в части стран.
 -- Там покупки за Robux скрываем целиком: игрок получает монеты только игрой. Если не удалось узнать — считаем, что ограничено.
 local paidRandomRestricted = {} -- player -> true
@@ -63,27 +74,59 @@ local function refreshPolicy(player)
 	end
 end
 local function incomeMultiplier(player)
-	if hasDoubleCoins[player] then
+	if owns(player, "doubleCoins") then
 		return FishConfig.Shop.DoubleCoins.mult
 	end
 	return 1
 end
+-- Лимит накопления дохода в офлайне (с пассом Night Watchman больше)
+local function offlineCap(player)
+	if owns(player, "nightWatch") and FishConfig.Shop.NightWatch.passId ~= 0 then
+		return FishConfig.Shop.NightWatch.offlineMax
+	end
+	return FishConfig.OFFLINE_MAX
+end
+-- Сколько гостей в очереди музея (с пассом Second Hall больше)
+local function queueSize(player)
+	local size = FishConfig.Visitors.QUEUE_SIZE
+	if owns(player, "secondHall") and FishConfig.Shop.SecondHall.passId ~= 0 then
+		size += FishConfig.Shop.SecondHall.extraQueue
+	end
+	return size
+end
+-- Сколько паков открывает кнопка «пачкой» (1 без пасса Quick Open)
+local function quickPacks(player)
+	if owns(player, "quickOpen") and FishConfig.Shop.QuickOpen.passId ~= 0 then
+		return FishConfig.Shop.QuickOpen.packs
+	end
+	return 1
+end
 local function sendShopState(player)
+	local profile = PlayerData.get(player)
 	shopStateEvent:FireClient(player, {
-		doubleCoins = hasDoubleCoins[player] == true,
+		doubleCoins = owns(player, "doubleCoins"),
+		nightWatch = owns(player, "nightWatch"),
+		secondHall = owns(player, "secondHall"),
+		quickOpen = owns(player, "quickOpen"),
 		restricted = paidRandomRestricted[player] ~= false,
+		starter = if profile ~= nil then Shop.starterOffer(profile, os.time()) else nil, -- секунд до конца предложения или nil
 	})
 end
 local function refreshPasses(player)
-	local passId = FishConfig.Shop.DoubleCoins.passId
-	if passId == 0 then
-		return
-	end
-	local ok, owns = pcall(function()
-		return MarketplaceService:UserOwnsGamePassAsync(player.UserId, passId)
-	end)
-	if ok and owns then
-		hasDoubleCoins[player] = true
+	for key, pass in pairs(PASSES) do
+		if pass.passId ~= 0 then
+			local ok, has = pcall(function()
+				return MarketplaceService:UserOwnsGamePassAsync(player.UserId, pass.passId)
+			end)
+			if ok and has then
+				local owned = passOwned[player]
+				if owned == nil then
+					owned = {}
+					passOwned[player] = owned
+				end
+				owned[key] = true
+			end
+		end
 	end
 end
 
@@ -175,8 +218,9 @@ end
 -- Вызывается и вместе со списком рыб: от рыб зависит, можно ли сейчас выполнить заказ.
 local function sendVisitors(player, profile, notice)
 	local now = os.time()
-	Visitors.refresh(profile, now)
-	local state = Visitors.summary(profile, now)
+	local size = queueSize(player)
+	Visitors.refresh(profile, now, nil, size)
+	local state = Visitors.summary(profile, now, size)
 	state.notice = notice
 	visitorsStateEvent:FireClient(player, state)
 end
@@ -237,10 +281,10 @@ local function pushState(player)
 	sendShopState(player)
 	settingsEvent:FireClient(player, profile.settings)
 
-	local gained = pendingOffline[player]
-	if gained then
+	local offline = pendingOffline[player]
+	if offline then
 		pendingOffline[player] = nil
-		offlineIncomeEvent:FireClient(player, gained)
+		offlineIncomeEvent:FireClient(player, offline.gained, offline.capped) -- capped: копилка заполнилась до предела
 	end
 end
 
@@ -261,10 +305,11 @@ local function onPlayerAdded(player)
 	local now = os.time()
 	refreshPasses(player)
 	refreshPolicy(player)
-	local gained = Economy.applyOffline(profile, now, incomeMultiplier(player))
+	profile.sessions = (profile.sessions or 0) + 1
+	local gained, capped = Economy.applyOffline(profile, now, incomeMultiplier(player), offlineCap(player))
 	profile.lastSeen = now
 	if gained > 0 then
-		pendingOffline[player] = gained
+		pendingOffline[player] = { gained = gained, capped = capped }
 		Telemetry.source(player, gained, profile.coins, Telemetry.TxType.Gameplay, "offline_income")
 	end
 	loaded[player] = true
@@ -280,7 +325,7 @@ local function onPlayerRemoving(player)
 	buckets[player] = nil
 	pendingOffline[player] = nil
 	funnelSent[player] = nil
-	hasDoubleCoins[player] = nil
+	passOwned[player] = nil
 	do
 		local leaving = PlayerData.get(player)
 		if leaving ~= nil then
@@ -304,12 +349,17 @@ end)
 
 -- ===== Открытие пака =====
 -- Клиент присылает только id пака. Цену, шансы и результат сервер берёт сам.
-openPackEvent.OnServerEvent:Connect(function(player, packId)
+openPackEvent.OnServerEvent:Connect(function(player, packId, count)
 	if not allow(player, "OpenPack", 2, 3) then
 		return
 	end
 	if typeof(packId) ~= "string" then
 		return
+	end
+	-- count необязателен: 1 или (с пассом Quick Open) число паков «пачкой»; всё остальное считаем одним паком
+	local times = 1
+	if typeof(count) == "number" and count == quickPacks(player) and count > 1 then
+		times = count
 	end
 	local pack = FishConfig.Packs[packId]
 	if pack == nil then
@@ -327,36 +377,47 @@ openPackEvent.OnServerEvent:Connect(function(player, packId)
 		return
 	end
 
-	-- Отказы — ДО списания монет
-	if #tankData.fish >= tankData.slots then
-		packResultEvent:FireClient(player, { ok = false, reason = "full" })
-		return
+	local opened = 0
+	local failReason = nil
+	for _ = 1, times do
+		-- Отказы — ДО списания монет
+		if #tankData.fish >= tankData.slots then
+			failReason = "full"
+			break
+		end
+		if profile.coins < pack.price then
+			failReason = "coins"
+			break
+		end
+
+		profile.coins -= pack.price
+		Telemetry.sink(player, pack.price, profile.coins, Telemetry.TxType.Shop, "pack_" .. packId)
+
+		local speciesId, rarity = PackRoller.roll(pack)
+		local fishId = profile.nextFishId
+		profile.nextFishId += 1
+		local variant = FishConfig.rollVariant()
+		table.insert(tankData.fish, { id = fishId, species = speciesId, variant = variant, born = os.time(), earned = 0 })
+
+		local isNew = not profile.discovered[speciesId]
+		profile.discovered[speciesId] = true
+		statsFor(profile, speciesId).pulled += 1
+		opened += 1
+
+		print(player.Name, "открыл", packId, "->", speciesId, "монет:", profile.coins, "рыб:", #tankData.fish)
+		-- fast: результаты «пачки» показываем без долгой анимации
+		packResultEvent:FireClient(player, { ok = true, species = speciesId, rarity = rarity, variant = variant, isNew = isNew, fast = times > 1 })
 	end
-	if profile.coins < pack.price then
-		packResultEvent:FireClient(player, { ok = false, reason = "coins" })
-		return
+
+	if opened > 0 then
+		sendCoins(player, profile)
+		sendFish(player, profile)
+		sendCollection(player, profile)
+		sendSets(player, profile)
+		trackStep(player, 2)
+	elseif failReason ~= nil then
+		packResultEvent:FireClient(player, { ok = false, reason = failReason })
 	end
-
-	profile.coins -= pack.price
-	Telemetry.sink(player, pack.price, profile.coins, Telemetry.TxType.Shop, "pack_" .. packId)
-
-	local speciesId, rarity = PackRoller.roll(pack)
-	local fishId = profile.nextFishId
-	profile.nextFishId += 1
-	local variant = FishConfig.rollVariant()
-	table.insert(tankData.fish, { id = fishId, species = speciesId, variant = variant, born = os.time(), earned = 0 })
-
-	local isNew = not profile.discovered[speciesId]
-	profile.discovered[speciesId] = true
-	statsFor(profile, speciesId).pulled += 1
-
-	print(player.Name, "открыл", packId, "->", speciesId, "монет:", profile.coins, "рыб:", #tankData.fish)
-	sendCoins(player, profile)
-	sendFish(player, profile)
-	sendCollection(player, profile)
-	sendSets(player, profile)
-	trackStep(player, 2)
-	packResultEvent:FireClient(player, { ok = true, species = speciesId, rarity = rarity, variant = variant, isNew = isNew })
 end)
 
 -- ===== Слияние =====
@@ -410,7 +471,7 @@ visitorActionEvent.OnServerEvent:Connect(function(player, action, a, b)
 		if typeof(a) ~= "number" or a ~= a or a ~= math.floor(a) then
 			return
 		end
-		local ok, info = Visitors.fulfill(profile, a, os.time())
+		local ok, info = Visitors.fulfill(profile, a, os.time(), queueSize(player))
 		if ok then
 			print(player.Name, "показал рыбу гостю: +" .. info.tickets, "билетов, ранг", info.rank)
 			sendVisitors(player, profile, { kind = "reward", tickets = info.tickets, rank = info.rank, rankUp = info.rankUp })
@@ -706,9 +767,23 @@ end)
 
 -- ===== Обработка покупок за Robux =====
 MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passId, wasPurchased)
-	if wasPurchased and passId == FishConfig.Shop.DoubleCoins.passId and passId ~= 0 then
-		hasDoubleCoins[player] = true
-		sendShopState(player)
+	if not wasPurchased or passId == 0 then
+		return
+	end
+	for key, pass in pairs(PASSES) do
+		if pass.passId == passId then
+			local owned = passOwned[player]
+			if owned == nil then
+				owned = {}
+				passOwned[player] = owned
+			end
+			owned[key] = true
+			sendShopState(player)
+			local profile = PlayerData.get(player)
+			if profile ~= nil then
+				sendVisitors(player, profile) -- Second Hall сразу добавляет места в очереди
+			end
+		end
 	end
 end)
 
@@ -734,6 +809,10 @@ MarketplaceService.ProcessReceipt = function(receiptInfo)
 		-- Сразу сохраняем: деньги за Robux не должны потеряться при сбое сервера
 		task.spawn(PlayerData.save, player)
 		sendCoins(player, profile)
+		sendFish(player, profile) -- стартовый набор добавляет рыбу и билеты
+		sendCollection(player, profile)
+		sendSets(player, profile)
+		sendShopState(player) -- предложение стартового набора после покупки исчезает
 	end
 	return Enum.ProductPurchaseDecision.PurchaseGranted
 end

@@ -63,16 +63,20 @@ function Economy.incomePerTick(profile, at)
 end
 
 -- Доход за время, пока игрока не было (от profile.lastSeen до now). Возвращает начисленную сумму.
-function Economy.applyOffline(profile, now, multiplier)
+-- maxSeconds (необязателен) — лимит накопления; пасс Night Watchman даёт больше обычного.
+-- Вторым значением возвращает true, если лимит был достигнут (копилка заполнилась).
+function Economy.applyOffline(profile, now, multiplier, maxSeconds)
 	local last = profile.lastSeen
 	if type(last) ~= "number" then
-		return 0
+		return 0, false
 	end
-	local ticks = FishConfig.offlineTicks(now - last)
+	local cap = maxSeconds or FishConfig.OFFLINE_MAX
+	local capped = (now - last) >= cap
+	local ticks = FishConfig.offlineTicks(now - last, cap)
 	if ticks <= 0 then
-		return 0
+		return 0, false
 	end
-	return Economy.applyIncome(profile, ticks, last, multiplier)
+	return Economy.applyIncome(profile, ticks, last, multiplier), capped
 end
 
 return Economy

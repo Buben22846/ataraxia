@@ -16,7 +16,9 @@ local defaultRng = Random.new()
 local RARITY_WEIGHT = { common = 6, rare = 3, epic = 1.5, legendary = 0.5 }
 
 -- Создаёт блок данных (и пустые места очереди), если их ещё нет
-function Visitors.ensure(profile)
+-- size — сколько мест в очереди (по умолчанию QUEUE_SIZE; пасс Second Hall добавляет места)
+function Visitors.ensure(profile, size)
+	size = size or V.QUEUE_SIZE
 	local v = profile.visitors
 	if v == nil then
 		v = { tickets = 0, completed = 0, nextId = 1, slots = {} }
@@ -26,7 +28,7 @@ function Visitors.ensure(profile)
 	v.completed = v.completed or 0
 	v.nextId = v.nextId or 1
 	v.slots = v.slots or {}
-	for i = 1, V.QUEUE_SIZE do
+	for i = 1, size do
 		if v.slots[i] == nil then
 			v.slots[i] = { waitUntil = 0 }
 		end
@@ -129,10 +131,11 @@ end
 
 -- Обновляет очередь: просроченные заказы заменяются, пустые места заполняются, когда пришло время.
 -- Возвращает true, если что-то изменилось.
-function Visitors.refresh(profile, now, rng)
-	local v = Visitors.ensure(profile)
+function Visitors.refresh(profile, now, rng, size)
+	size = size or V.QUEUE_SIZE
+	local v = Visitors.ensure(profile, size)
 	local changed = false
-	for i = 1, V.QUEUE_SIZE do
+	for i = 1, size do
 		local slot = v.slots[i]
 		if slot.species then
 			if now >= slot.expires then
@@ -165,9 +168,10 @@ function Visitors.matchingFish(profile, order, now)
 end
 
 -- Показать рыбу гостю. Возвращает true, { tickets, rank, rankUp } или false, причина ("missing" / "nofish").
-function Visitors.fulfill(profile, orderId, now)
-	local v = Visitors.ensure(profile)
-	for i = 1, V.QUEUE_SIZE do
+function Visitors.fulfill(profile, orderId, now, size)
+	size = size or V.QUEUE_SIZE
+	local v = Visitors.ensure(profile, size)
+	for i = 1, size do
 		local order = v.slots[i]
 		if order.species and order.id == orderId and now < order.expires then
 			if Visitors.matchingFish(profile, order, now) == nil then
@@ -195,11 +199,12 @@ function Visitors.spend(profile, amount)
 end
 
 -- Всё для клиента: билеты, выполнено заказов, ранг, следующий порог и очередь (заказ с флагом ready или ожидание)
-function Visitors.summary(profile, now)
-	local v = Visitors.ensure(profile)
+function Visitors.summary(profile, now, size)
+	size = size or V.QUEUE_SIZE
+	local v = Visitors.ensure(profile, size)
 	local rank = Visitors.rank(v.completed)
 	local orders = {}
-	for i = 1, V.QUEUE_SIZE do
+	for i = 1, size do
 		local slot = v.slots[i]
 		if slot.species then
 			table.insert(orders, {

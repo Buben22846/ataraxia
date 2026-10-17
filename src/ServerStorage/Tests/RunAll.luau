@@ -433,6 +433,55 @@ return function()
 	check("сводка для клиента: билеты, ранг и 3 строки очереди", summary.tickets == vp.visitors.tickets and summary.rank == 1 and #summary.orders == 3 and summary.nextRankAt == 5)
 	check("траты билетов: хватает/не хватает", Visitors.spend(vp, vp.visitors.tickets + 1) == false and Visitors.spend(vp, 1) == true and Visitors.spend(vp, 0) == false)
 
+	-- ===== Магазин 2.0: пассы и стартовый набор =====
+	local offlineProfile = function()
+		return { coins = 0, lastSeen = 1000, tanks = { lagoon = { slots = 5, fish = { { id = 1, species = "guppy", variant = "normal", born = 0, earned = 0 } } } }, speciesStats = {} }
+	end
+	local op2 = offlineProfile()
+	local normalGain, normalCapped = Economy.applyOffline(op2, 1000 + 24 * 3600, 1)
+	local op3 = offlineProfile()
+	local longGain, longCapped = Economy.applyOffline(op3, 1000 + 24 * 3600, 1, FishConfig.Shop.NightWatch.offlineMax)
+	check("офлайн: обычный лимит 2 часа, копилка заполнена", normalGain == FishConfig.offlineTicks(24 * 3600) * FishConfig.incomeOf("guppy", "normal", 1000) and normalCapped == true)
+	check("офлайн: Night Watchman копит в 6 раз дольше (12 часов)", longGain == normalGain * 6 and longCapped == true)
+	local op4 = offlineProfile()
+	local _, shortCapped = Economy.applyOffline(op4, 1000 + 600, 1, FishConfig.Shop.NightWatch.offlineMax)
+	check("офлайн: короткое отсутствие копилку не заполняет", shortCapped == false)
+
+	local starterConfig = FishConfig.Shop.StarterPack
+	local realStarterId = starterConfig.productId
+	check("стартовый набор: пока id = 0, он не предлагается", (function()
+		starterConfig.productId = 0
+		return Shop.starterOffer({ sessions = 5, starter = { offeredAt = 0, bought = false } }, T0) == nil
+	end)())
+	starterConfig.productId = 222
+	local stp = { coins = 0, nextFishId = 1, sessions = 1, discovered = {}, tanks = { lagoon = FishConfig.newTank() }, speciesStats = {}, receipts = { list = {}, seen = {} } }
+	check("стартовый набор: в первой сессии не показываем", Shop.starterOffer(stp, T0) == nil)
+	stp.sessions = 2
+	local leftFirst = Shop.starterOffer(stp, T0)
+	check("стартовый набор: во второй сессии есть 24 часа", leftFirst == starterConfig.offerHours * 3600)
+	check("стартовый набор: таймер не перезапускается", Shop.starterOffer(stp, T0 + 3600) == starterConfig.offerHours * 3600 - 3600)
+	check("стартовый набор: по истечении времени пропадает", Shop.starterOffer(stp, T0 + starterConfig.offerHours * 3600 + 1) == nil)
+	check("стартовый набор: выдаёт монеты, билеты и известную рыбу", (function()
+		local result = Shop.grant(stp, 222, "s1", T0)
+		local fish = stp.tanks.lagoon.fish[1]
+		return result == "granted"
+			and stp.coins >= FishConfig.Shop.MIN_COINS
+			and stp.visitors.tickets == starterConfig.tickets
+			and fish ~= nil and fish.species == starterConfig.fish.species and fish.variant == starterConfig.fish.variant
+			and stp.starter.bought == true
+	end)())
+	check("стартовый набор: после покупки не предлагается", Shop.starterOffer(stp, T0 + 10) == nil)
+	check("стартовый набор: разовый, повторная покупка даёт только монеты", (function()
+		local coinsBefore = stp.coins
+		Shop.grant(stp, 222, "s2", T0)
+		return stp.visitors.tickets == starterConfig.tickets and #stp.tanks.lagoon.fish == 1 and stp.coins > coinsBefore
+	end)())
+	starterConfig.productId = realStarterId
+
+	local bigQueue = museumProfile()
+	Visitors.refresh(bigQueue, T0, Random.new(9), FishConfig.Visitors.QUEUE_SIZE + FishConfig.Shop.SecondHall.extraQueue)
+	check("Second Hall: в очереди на 3 места больше", #bigQueue.visitors.slots == 6 and Visitors.summary(bigQueue, T0, 6).orders[6] ~= nil)
+
 	-- ===== Короткая запись чисел =====
 	local Strings = require(ReplicatedStorage.Shared.Strings)
 	check("число: до 1000 без сокращения", Strings.num(0) == "0" and Strings.num(7) == "7" and Strings.num(999) == "999")
