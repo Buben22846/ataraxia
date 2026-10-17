@@ -964,9 +964,8 @@ end)
 -- ===== Карточка статистики выбранной рыбы (под вторым рядом кнопок) =====
 local infoCard = make("Frame", {
 	Name = "FishInfo",
-	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.fromScale(0.5, 0.175),
-	Size = UDim2.fromScale(0.96, 0.15),
+	Position = UDim2.fromScale(0.02, 0.175), -- компактная плашка слева, чтобы не закрывать аквариум
+	Size = UDim2.fromScale(0.72, 0.105),
 	BackgroundColor3 = COLOR_PANEL,
 	BackgroundTransparency = 0.1,
 	BorderSizePixel = 0,
@@ -982,24 +981,41 @@ local function infoLine(name, y, h, color)
 		Size = UDim2.fromScale(0.94, h),
 		BackgroundTransparency = 1,
 		TextScaled = true,
-		MinText = 11,
-		MaxText = 22,
+		MinText = 9,
+		MaxText = 20,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = color,
 		Font = FONT,
 		ZIndex = 5,
 	}, infoCard)
 end
-local infoTitle = infoLine("Title", 0.05, 0.32, WHITE)
-local infoIncome = infoLine("Income", 0.38, 0.28, Color3.fromRGB(190, 220, 230))
-local infoStats = infoLine("Stats", 0.68, 0.28, Color3.fromRGB(190, 220, 230))
+local infoTitle = infoLine("Title", 0.05, 0.3, WHITE)
+local infoIncome = infoLine("Income", 0.37, 0.28, Color3.fromRGB(190, 220, 230))
+local infoStats = infoLine("Stats", 0.67, 0.28, Color3.fromRGB(190, 220, 230))
+
+-- Кнопка «закрыть» справа от плашки: снимает выбор рыбы (то же делает клавиша Esc)
+local infoClose = make("TextButton", {
+	Name = "InfoClose",
+	Position = UDim2.fromScale(0.76, 0.175),
+	SizeConstraint = Enum.SizeConstraint.RelativeYY, -- ширина и высота считаются от высоты экрана: кнопка квадратная
+	Size = UDim2.fromScale(0.075, 0.075),
+	BackgroundColor3 = COLOR_PANEL,
+	BorderSizePixel = 0,
+	Text = "✕",
+	TextScaled = true,
+	MinText = 12,
+	TextColor3 = WHITE,
+	Font = FONT,
+	ZIndex = 4,
+	Visible = false,
+}, gui)
+make("UICorner", { CornerRadius = UDim.new(0.25, 0) }, infoClose)
 
 -- Кнопка продажи (появляется при выборе рыбы)
 local sellButton = make("TextButton", {
 	Name = "SellButton",
-	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.fromScale(0.5, 0.335),
-	Size = UDim2.fromScale(0.7, 0.06),
+	Position = UDim2.fromScale(0.02, 0.285),
+	Size = UDim2.fromScale(0.72, 0.052),
 	BackgroundColor3 = COLOR_WARN,
 	BorderSizePixel = 0,
 	TextScaled = true,
@@ -1069,13 +1085,35 @@ local function refreshSelection()
 	for id, fish in pairs(fishById) do
 		fish.label.BackgroundTransparency = if id == selectedId then 0.7 else 1
 	end
-	if selectedId ~= nil then
-		sellButton.Visible = true -- текст кнопки (цену) выставляет updateInfo
-	else
-		sellButton.Visible = false
-	end
+	sellButton.Visible = selectedId ~= nil -- текст кнопки (цену) выставляет updateInfo
+	infoClose.Visible = selectedId ~= nil
 	updateInfo()
 	MergeUi.refresh()
+end
+
+-- Закрыть плашку рыбы: кнопка ✕ и клавиша Esc. Esc сначала закрывает открытое окно (магазин, коллекция...), и только потом снимает выбор.
+do
+	local UserInputService = game:GetService("UserInputService")
+	infoClose.Activated:Connect(function()
+		Sfx.click()
+		selectedId = nil
+		refreshSelection()
+	end)
+	UserInputService.InputBegan:Connect(function(input)
+		if input.KeyCode ~= Enum.KeyCode.Escape then
+			return -- Esc обрабатываем даже если Roblox уже занял клавишу: меню Roblox всё равно откроется, но игра тоже отреагирует
+		end
+		for _, child in ipairs(gui:GetChildren()) do
+			if child:IsA("TextButton") and child.Name:match("Panel$") and child.Visible then
+				child.Visible = false
+				return
+			end
+		end
+		if selectedId ~= nil then
+			selectedId = nil
+			refreshSelection()
+		end
+	end)
 end
 
 local function selectFish(id)
@@ -1109,9 +1147,8 @@ do
 	local setsEvent = remotes:WaitForChild("SetsChanged")
 	local mergeButton = make("TextButton", {
 		Name = "MergeButton",
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.fromScale(0.5, 0.4),
-		Size = UDim2.fromScale(0.7, 0.06),
+		Position = UDim2.fromScale(0.02, 0.343),
+		Size = UDim2.fromScale(0.72, 0.052),
 		BackgroundColor3 = COLOR_BUTTON,
 		BorderSizePixel = 0,
 		TextScaled = true,
