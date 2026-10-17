@@ -36,8 +36,9 @@ local T = Strings.t
 
 -- ===== ЗВУК =====
 -- Только встроенные клиентские файлы rbxasset://sounds/... (загружать ничего не нужно).
--- Громкость каждого звука не выше 0.4. Ambient — фоновая музыка (пока нет): впишите сюда id,
--- и она будет играть по кругу с громкостью AmbientVolume.
+-- Громкость каждого звука не выше 0.4. Фоновая музыка — плейлист Playlist: треки играют по очереди
+-- (каждый раз в случайном порядке) с паузой между ними и громкостью AmbientVolume.
+-- Все треки из Creator Store (бесплатные для использования в играх Roblox, автор DistrokidOfficial).
 local Audio = {
 	Volume = 0.35, -- общая громкость эффектов (потолок 0.4)
 	Sounds = {
@@ -48,8 +49,15 @@ local Audio = {
 		buy = "rbxasset://sounds/snap.mp3", -- покупка (пак, место, аквариум)
 	},
 	Gain = { click = 0.7, open = 0.6, reveal = 0.8, reward = 0.7, buy = 0.9 }, -- множитель от Volume
-	Ambient = nil, -- например "rbxassetid://123456"
-	AmbientVolume = 0.25,
+	Playlist = {
+		"rbxassetid://140662085604483", -- Aroma calm ritual
+		"rbxassetid://115907387271753", -- Winds of Stillness
+		"rbxassetid://103491917833365", -- Silent Moon Drift
+		"rbxassetid://88326647335364", -- Warm stones meditation
+		"rbxassetid://106345640140355", -- Soothing Cosmic Drift
+	},
+	AmbientVolume = 0.2,
+	AmbientGap = 6, -- пауза между треками, секунд
 }
 local MAX_SFX_VOLUME = 0.4
 -- =====================
@@ -114,14 +122,59 @@ pcall(function()
 		local volume = math.min(Audio.Volume * (Audio.Gain[key] or 1), MAX_SFX_VOLUME)
 		Sfx.sounds[key] = make("Sound", { Name = "Sfx_" .. key, SoundId = id, Volume = volume }, gui)
 	end
-	if Audio.Ambient then
+end)
+
+-- Фоновая музыка: один Sound, в который по очереди подставляются треки плейлиста.
+-- Трек, который не загрузился, пропускается; если не играет ни один, цикл тихо останавливается.
+task.spawn(function()
+	local list = Audio.Playlist
+	if list == nil or #list == 0 then
+		return
+	end
+	local ok = pcall(function()
 		Sfx.ambient = make("Sound", {
 			Name = "Ambient",
-			SoundId = Audio.Ambient,
-			Volume = math.min(Audio.AmbientVolume, MAX_SFX_VOLUME),
-			Looped = true,
+			Volume = if Sfx.enabled then math.min(Audio.AmbientVolume, MAX_SFX_VOLUME) else 0,
+			Looped = false,
 		}, gui)
-		Sfx.ambient:Play()
+	end)
+	if not ok or Sfx.ambient == nil then
+		return
+	end
+	local rng = Random.new()
+	local failures = 0
+	while failures < #list * 2 do
+		-- новый случайный порядок на каждый круг плейлиста
+		local order = table.clone(list)
+		for i = #order, 2, -1 do
+			local j = rng:NextInteger(1, i)
+			order[i], order[j] = order[j], order[i]
+		end
+		for _, id in ipairs(order) do
+			local sound = Sfx.ambient
+			sound.SoundId = id
+			sound:Play()
+			local started = os.clock()
+			-- ждём конец трека; если за 15 секунд он так и не начал играть, трек не загрузился
+			local ended = false
+			local connection = sound.Ended:Connect(function()
+				ended = true
+			end)
+			while not ended and sound.Parent ~= nil do
+				task.wait(1)
+				if not sound.IsPlaying and not sound.IsLoaded and os.clock() - started > 15 then
+					break
+				end
+			end
+			connection:Disconnect()
+			sound:Stop()
+			if os.clock() - started < 20 then
+				failures += 1 -- слишком короткий «трек» = не загрузился
+			else
+				failures = 0
+			end
+			task.wait(Audio.AmbientGap)
+		end
 	end
 end)
 
@@ -1564,8 +1617,13 @@ do
 		return result
 	end
 
+	-- Пока сервер не прислал состояние или он сообщил об ограничении платного рандома, магазин скрыт
+	local function isRestricted()
+		return Shop.state == nil or Shop.state.restricted ~= false
+	end
+
 	local function isConfigured()
-		return passId() > 0 or #activeProducts() > 0
+		return not isRestricted() and (passId() > 0 or #activeProducts() > 0)
 	end
 
 	-- Форма слова по числу: ru — 1 / 2-4 / 5+, en — 1 / остальные (ключи prefix_1, prefix_2, prefix_5)
@@ -1687,6 +1745,10 @@ do
 
 	function Shop.refresh()
 		clearRows(shopPanel.list)
+		shopButton.Visible = isConfigured()
+		if isRestricted() then
+			return
+		end
 		local pass = passId()
 		local products = activeProducts()
 		local count = #products + (if pass > 0 then 1 else 0)
@@ -1732,7 +1794,7 @@ do
 			end
 			local owned = state.doubleCoins == true
 			local previous = Shop.state
-			Shop.state = { doubleCoins = owned }
+			Shop.state = { doubleCoins = owned, restricted = state.restricted ~= false }
 			doubleBadge.Visible = owned
 			if previous ~= nil and not previous.doubleCoins and owned then
 				Sfx.play("reward")

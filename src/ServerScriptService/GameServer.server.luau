@@ -13,6 +13,7 @@ local Economy = require(ServerScriptService:WaitForChild("Economy"))
 local DailyReward = require(ServerScriptService:WaitForChild("DailyReward"))
 local AnalyticsService = game:GetService("AnalyticsService")
 local MarketplaceService = game:GetService("MarketplaceService")
+local PolicyService = game:GetService("PolicyService")
 local Shop = require(ServerScriptService:WaitForChild("Shop"))
 
 -- ===== НАСТРОЙКИ =====
@@ -39,6 +40,19 @@ local shopStateEvent = remotes:WaitForChild("ShopState")
 -- ===== Покупки за Robux =====
 -- Геймпасс «x2 монеты» проверяем у MarketplaceService при входе и после покупки; результат помним на сервере.
 local hasDoubleCoins = {} -- player -> true
+-- Платный рандом (паки за монеты, а монеты продаются за Robux) ограничен в части стран.
+-- Там покупки за Robux скрываем целиком: игрок получает монеты только игрой. Если не удалось узнать — считаем, что ограничено.
+local paidRandomRestricted = {} -- player -> true
+local function refreshPolicy(player)
+	local ok, info = pcall(function()
+		return PolicyService:GetPolicyInfoForPlayerAsync(player)
+	end)
+	if ok and typeof(info) == "table" then
+		paidRandomRestricted[player] = info.ArePaidRandomItemsRestricted == true
+	else
+		paidRandomRestricted[player] = true
+	end
+end
 local function incomeMultiplier(player)
 	if hasDoubleCoins[player] then
 		return FishConfig.Shop.DoubleCoins.mult
@@ -46,7 +60,10 @@ local function incomeMultiplier(player)
 	return 1
 end
 local function sendShopState(player)
-	shopStateEvent:FireClient(player, { doubleCoins = hasDoubleCoins[player] == true })
+	shopStateEvent:FireClient(player, {
+		doubleCoins = hasDoubleCoins[player] == true,
+		restricted = paidRandomRestricted[player] ~= false,
+	})
 end
 local function refreshPasses(player)
 	local passId = FishConfig.Shop.DoubleCoins.passId
@@ -215,6 +232,7 @@ local function onPlayerAdded(player)
 	-- Пока игрока не было, рыбы приносили часть дохода
 	local now = os.time()
 	refreshPasses(player)
+	refreshPolicy(player)
 	local gained = Economy.applyOffline(profile, now, incomeMultiplier(player))
 	profile.lastSeen = now
 	if gained > 0 then
