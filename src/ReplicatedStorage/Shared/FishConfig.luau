@@ -150,10 +150,10 @@ FishConfig.VariantOrder = { "normal", "golden", "rainbow" }
 --   Products[i].seconds — товар даёт монеты, равные столькому времени текущего дохода (но не меньше MIN_COINS),
 --   поэтому он честен и в начале игры, и в конце.
 FishConfig.Shop = {
-	DoubleCoins = { passId = 0, mult = 2 },
+	DoubleCoins = { passId = 2040116972, mult = 2 }, -- Poseidon's Blessing
 	Products = {
-		{ key = "coins_1h", productId = 0, seconds = 3600 },
-		{ key = "coins_8h", productId = 0, seconds = 28800 },
+		{ key = "coins_1h", productId = 3719343518, seconds = 3600 }, -- Gift of Nereus (25 R$)
+		{ key = "coins_8h", productId = 3719343283, seconds = 28800 }, -- Handful of Pearls (50 R$)
 	},
 	MIN_COINS = 500,
 }

@@ -267,15 +267,18 @@ return function()
 	local doubled = Economy.applyIncome(sp2, 1, 0, 2)
 	check("множитель x2 удваивает доход", doubled == base * 2 and base > 0)
 	check("доход за тик без бонусов считается", Economy.incomePerTick(sp, 0) == base)
-	local shopOk = FishConfig.Shop.Products[1].productId == 0
-	check("пока id товаров = 0, товар не находится", Shop.productById(0) == nil and shopOk)
+	local realProductId = FishConfig.Shop.Products[1].productId -- тест подменяет id и потом возвращает настоящий
+	check("id = 0 никогда не считается товаром", Shop.productById(0) == nil)
 	FishConfig.Shop.Products[1].productId = 111
 	local shopProfile = { coins = 0, tanks = { lagoon = FishConfig.newTank() }, speciesStats = {}, receipts = { list = {}, seen = {} } }
 	check("товар: пустой аквариум даёт минимум монет", Shop.coinsFor(shopProfile, FishConfig.Shop.Products[1], 1000) == FishConfig.Shop.MIN_COINS)
 	check("товар: первая выдача по чеку", Shop.grant(shopProfile, 111, "p1", 1000) == "granted" and shopProfile.coins == FishConfig.Shop.MIN_COINS)
 	check("товар: тот же чек второй раз не даёт монет", Shop.grant(shopProfile, 111, "p1", 1000) == "duplicate" and shopProfile.coins == FishConfig.Shop.MIN_COINS)
 	check("товар: неизвестный id не выдаётся", Shop.grant(shopProfile, 999, "p2", 1000) == "unknown")
-	FishConfig.Shop.Products[1].productId = 0
+	FishConfig.Shop.Products[1].productId = realProductId
+	for _, product in ipairs(FishConfig.Shop.Products) do
+		check("товар " .. product.key .. " находится по своему id", product.productId == 0 or Shop.productById(product.productId) == product)
+	end
 
 	-- ===== Конфиг =====
 	for packId, pack in pairs(FishConfig.Packs) do
