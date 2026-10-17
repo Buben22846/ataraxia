@@ -12,6 +12,9 @@ local UIKit = {}
 local SLICE = {
 	ui_panel = { size = 24, corner = 6 },
 	ui_row = { size = 12, corner = 4 },
+	-- билет не квадратный: ширина w, высота h, угол по горизонтали cx и по вертикали cy
+	ui_ticket = { w = 32, h = 16, cx = 10, cy = 5 },
+	ui_ticket_down = { w = 32, h = 16, cx = 10, cy = 5 },
 }
 for _, name in ipairs({ "ui_btn", "ui_btn_down", "ui_btn_gold", "ui_btn_gold_down", "ui_btn_dark", "ui_btn_dark_down", "ui_btn_off" }) do
 	SLICE[name] = { size = 16, corner = 5 }
@@ -55,7 +58,9 @@ local sliced = setmetatable({}, { __mode = "k" }) -- ImageLabel -> true (для 
 local function applySlice(label, id)
 	local slice = SLICE[id]
 	label.ScaleType = Enum.ScaleType.Slice
-	label.SliceCenter = Rect.new(slice.corner, slice.corner, slice.size - slice.corner, slice.size - slice.corner)
+	local w, h = slice.w or slice.size, slice.h or slice.size
+	local cx, cy = slice.cx or slice.corner, slice.cy or slice.corner
+	label.SliceCenter = Rect.new(cx, cy, w - cx, h - cy)
 	label.SliceScale = pixelScale()
 	sliced[label] = true
 end
@@ -118,11 +123,15 @@ local function skinText(button, fixedLook)
 		if image == nil then
 			return false
 		end
-		-- копия текста
+		-- копия текста; textScale — доля ширины под текст (у билета края заняты корешками)
+		local textScale = look.textScale
+		local basePosition = if textScale then UDim2.fromScale(0.5, 0.5) else UDim2.new()
 		local text = Instance.new("TextLabel")
 		text.Name = "SkinText"
 		text.BackgroundTransparency = 1
-		text.Size = UDim2.fromScale(1, 1)
+		text.Size = UDim2.fromScale(textScale or 1, 1)
+		text.AnchorPoint = if textScale then Vector2.new(0.5, 0.5) else Vector2.zero
+		text.Position = basePosition
 		text.ZIndex = 2
 		text.Active = false
 		text.Font = button.Font
@@ -143,12 +152,13 @@ local function skinText(button, fixedLook)
 
 		local pressed = false
 		local function refresh()
-			look = lookFor(button.BackgroundColor3)
+			look = fixedLook or lookFor(button.BackgroundColor3)
 			local id = if pressed then look.down else look.up
 			if Sprites.apply(image, id, false) then
 				applySlice(image, id)
 			end
-			text.Position = if pressed and look.down ~= look.up then UDim2.fromOffset(0, pixelScale()) else UDim2.new()
+			local shift = if pressed and look.down ~= look.up then pixelScale() else 0
+			text.Position = basePosition + UDim2.fromOffset(0, shift)
 		end
 		button:GetPropertyChangedSignal("Text"):Connect(function()
 			text.Text = button.Text
@@ -189,6 +199,40 @@ end
 function UIKit.label(label)
 	local look = { up = "ui_btn_dark", down = "ui_btn_dark" }
 	return skinText(label, look)
+end
+
+-- Цирковой билет: красная кнопка-приманка. Нажимается как обычная кнопка (Activated), текст читается из button.Text.
+function UIKit.ticket(button)
+	return skinText(button, { up = "ui_ticket", down = "ui_ticket_down", textScale = 0.62 })
+end
+
+-- Пульсация: кнопка плавно «дышит» (размер ±4%) и мигает тёплым оттенком. Работает и без картинок (тогда только размер).
+-- Возвращает функцию остановки.
+function UIKit.pulse(button, period)
+	period = period or 0.8
+	local TweenService = game:GetService("TweenService")
+	local base = button.Size
+	local info = TweenInfo.new(period, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
+	local grow = TweenService:Create(button, info, {
+		Size = UDim2.new(base.X.Scale * 1.04, base.X.Offset, base.Y.Scale * 1.07, base.Y.Offset),
+	})
+	grow:Play()
+	local tweens = { grow }
+	local skin = button:FindFirstChild("Skin")
+	if skin and skin:IsA("ImageLabel") then
+		local blink = TweenService:Create(skin, info, { ImageColor3 = Color3.fromRGB(255, 196, 120) })
+		blink:Play()
+		table.insert(tweens, blink)
+	end
+	return function()
+		for _, tween in ipairs(tweens) do
+			tween:Cancel()
+		end
+		button.Size = base
+		if skin then
+			skin.ImageColor3 = Color3.new(1, 1, 1)
+		end
+	end
 end
 
 return UIKit

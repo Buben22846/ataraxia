@@ -373,7 +373,11 @@ buyButton.Position = UDim2.fromScale(0.5, 0.985)
 buyButton.Size = UDim2.fromScale(0.96, 0.095)
 make("UITextSizeConstraint", { MinTextSize = 14, MaxTextSize = 34 }, buyButton)
 make("UICorner", { CornerRadius = UDim.new(0.2, 0) }, buyButton)
-UIKit.button(buyButton) -- кнопка создана в Studio, а не через make(), поэтому скин вешаем вручную
+-- Кнопка паков — «цирковой билет», который пульсирует и привлекает внимание.
+-- Создана в Studio, а не через make(), поэтому скин вешаем вручную.
+buyButton.TextColor3 = Color3.fromRGB(255, 241, 193)
+UIKit.ticket(buyButton)
+UIKit.pulse(buyButton)
 
 local function refreshBuyButton()
 	local pack = currentPack()

@@ -74,7 +74,59 @@ def row():
     return box(12, 12, 1, "#083448", "#0b4259", "#062b3c", raised=False, edge_rows=1)
 
 
+def ticket(down=False):
+    """Цирковой билет 32x16: красный, с вырезами по бокам, пунктиром-отрывом и золотыми звёздами.
+    Срез 9-slice: по горизонтали углы по 10 px (вырез, отрыв и звезда остаются целыми), по вертикали 5 px."""
+    w, h = 32, 16
+    fill, light, shade = ("#c8202f", "#ff5a5f", "#8f1523") if down else ("#e63946", "#ff7a7d", "#a81f2e")
+    cream, gold, perf = "#fff1c1", "#ffca28", "#7a1420"
+    mask = set()
+    for y in range(h):
+        for x in range(w):
+            cx = min(x, w - 1 - x)
+            cy = min(y, h - 1 - y)
+            if (cx, cy) in CUTS[1]:
+                continue
+            # полукруглые вырезы посередине боковых сторон
+            if cx * cx + (y - 7.5) ** 2 <= 9:
+                continue
+            mask.add((x, y))
+    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    inner = set()
+    for (x, y) in mask:
+        edge = any((x + dx, y + dy) not in mask for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)))
+        if edge:
+            img.putpixel((x, y), hx(OUT))
+        else:
+            inner.add((x, y))
+    for (x, y) in inner:
+        color = fill
+        if y == 1:
+            color = light
+        elif y >= h - 3:
+            color = shade
+        img.putpixel((x, y), hx(color))
+    # кремовая рамка внутри (только по верху и низу, середина тянется)
+    for x in range(4, w - 4):
+        for y in (3, h - 4):
+            if (x, y) in inner:
+                img.putpixel((x, y), hx(cream))
+    # пунктир-отрыв
+    for px in (8, 23):
+        for y in range(3, h - 3):
+            if (y % 2 == 1) and (px, y) in inner:
+                img.putpixel((px, y), hx(perf))
+    # золотые звёзды-кресты на корешках
+    for (sx, sy) in ((5, 8), (26, 8)):
+        for dx, dy in ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)):
+            img.putpixel((sx + dx, sy + dy), hx(gold))
+        img.putpixel((sx, sy), hx(cream))
+    return img
+
+
 ASSETS = {
+    "ui_ticket": ticket(),
+    "ui_ticket_down": ticket(True),
     "ui_panel": panel(),
     "ui_row": row(),
     "ui_btn": box(16, 16, 2, "#26a69a", "#7fe3d6", "#177a70"),

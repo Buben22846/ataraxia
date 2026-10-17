@@ -21,7 +21,7 @@ SPRITES = [
     "lantern_fish", "jellyfish", "anglerfish", "abyss_ray", "leviathan",
 ]
 BACKGROUNDS = ["bg_lagoon", "bg_volcano", "bg_arctic", "bg_abyss"]
-UI = ["ui_panel", "ui_row", "ui_btn", "ui_btn_down", "ui_btn_gold", "ui_btn_gold_down", "ui_btn_dark", "ui_btn_dark_down", "ui_btn_off"]  # art/src/ui_kit.py
+UI = ["ui_ticket", "ui_ticket_down", "ui_panel", "ui_row", "ui_btn", "ui_btn_down", "ui_btn_gold", "ui_btn_gold_down", "ui_btn_dark", "ui_btn_dark_down", "ui_btn_off"]  # art/src/ui_kit.py
 
 
 def encode(name):
