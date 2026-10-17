@@ -1447,8 +1447,20 @@ function Daily.tryAutoShow()
 	end
 	Daily.autoShown = true
 	task.spawn(function()
-		while revealBusy do
-			task.wait(0.5) -- не перебиваем открытие пака
+		-- не перебиваем открытие пака и уже открытые окна
+		local function busy()
+			if revealBusy then
+				return true
+			end
+			for _, child in ipairs(gui:GetChildren()) do
+				if child ~= dailyPanel.overlay and child:IsA("GuiButton") and string.sub(child.Name, -5) == "Panel" and child.Visible then
+					return true
+				end
+			end
+			return false
+		end
+		while busy() do
+			task.wait(0.5)
 		end
 		if Daily.state ~= nil and Daily.state.canClaim then
 			Daily.open()
