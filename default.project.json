@@ -32,6 +32,9 @@
         "FishChanged": {
           "$className": "RemoteEvent"
         },
+        "OfflineIncome": {
+          "$className": "RemoteEvent"
+        },
         "OpenPack": {
           "$className": "RemoteEvent"
         },
@@ -51,6 +54,9 @@
       },
       "PlayerData": {
         "$path": "src/ServerScriptService/PlayerData.luau"
+      },
+      "Economy": {
+        "$path": "src/ServerScriptService/Economy.luau"
       },
       "PackRoller": {
         "$path": "src/ServerScriptService/PackRoller.luau"

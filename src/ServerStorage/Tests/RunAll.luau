@@ -81,7 +81,7 @@ return function()
 		},
 	}
 	local p7 = M._claim(1004)
-	check("миграция v1 -> v2: появились места", p7 ~= nil and p7.version == 2 and p7.slots == FishConfig.START_SLOTS)
+	check("миграция v1 -> v3: появились места и lastSeen", p7 ~= nil and p7.version == 3 and p7.slots == FishConfig.START_SLOTS and type(p7.lastSeen) == "number")
 	check("миграция v1 -> v2: старые данные целы", p7 ~= nil and p7.coins == 321 and #p7.fish == 1 and p7.speciesStats.guppy.pulled == 2)
 
 	data["Player_1005"] = { data = { version = 1, coins = 5 } }
@@ -91,6 +91,74 @@ return function()
 	local a, b = M._newProfile(), M._newProfile()
 	a.fish[1] = { id = 1 }
 	check("новые профили независимы", #b.fish == 0)
+
+	data["Player_1006"] = { data = { version = 2, coins = 5, slots = 6, nextFishId = 1, fish = {}, discovered = {}, speciesStats = {} } }
+	local p9 = M._claim(1006)
+	check("миграция v2 -> v3: lastSeen появился, данные целы", p9 ~= nil and p9.version == 3 and type(p9.lastSeen) == "number" and p9.slots == 6 and p9.coins == 5)
+
+	-- ===== Рост, варианты, доход =====
+	check(
+		"стадии роста по возрасту",
+		FishConfig.stageFor(0).name == "Малёк"
+			and FishConfig.stageFor(599).name == "Малёк"
+			and FishConfig.stageFor(600).name == "Подросток"
+			and FishConfig.stageFor(1800).name == "Взрослая"
+	)
+	check(
+		"доход растёт с возрастом",
+		FishConfig.incomeOf("guppy", "normal", 0) == 1
+			and FishConfig.incomeOf("guppy", "normal", 3600) == 2
+			and FishConfig.incomeOf("clown", "normal", 700) == 3
+	)
+	check(
+		"варианты умножают доход",
+		FishConfig.incomeOf("guppy", "golden", 3600) == 4 and FishConfig.incomeOf("whale", "rainbow", 3600) == 100
+	)
+	check(
+		"цена продажи растёт",
+		FishConfig.sellPriceOf("puffer", "normal", 3600) == 40 and FishConfig.sellPriceOf("puffer", "golden", 0) == 40
+	)
+	check(
+		"без варианта = обычная; неизвестный вид = 0",
+		FishConfig.incomeOf("guppy", nil, 0) == 1 and FishConfig.incomeOf("nope", "normal", 0) == 0
+	)
+	do
+		local vrng = Random.new(7)
+		local VN = 100000
+		local vcounts = { normal = 0, golden = 0, rainbow = 0 }
+		for _ = 1, VN do
+			local id = FishConfig.rollVariant(vrng)
+			vcounts[id] = (vcounts[id] or 0) + 1
+		end
+		local goldenPct = vcounts.golden / VN * 100
+		local rainbowPct = vcounts.rainbow / VN * 100
+		check(string.format("вариант golden %.2f%% ≈ 11%%", goldenPct), math.abs(goldenPct - 11) < 0.5)
+		check(string.format("вариант rainbow %.2f%% ≈ 1%%", rainbowPct), math.abs(rainbowPct - 1) < 0.3)
+	end
+	check(
+		"офлайн: число тиков и потолок",
+		FishConfig.offlineTicks(0) == 0
+			and FishConfig.offlineTicks(-5) == 0
+			and FishConfig.offlineTicks(3600) == 360
+			and FishConfig.offlineTicks(1000000) == 720
+	)
+
+	local Economy = require(ServerScriptService.Economy)
+	local ep = M._newProfile()
+	ep.fish = { { id = 1, species = "guppy", variant = "normal", born = os.time() - 3600, earned = 0 } }
+	local gained = Economy.applyIncome(ep, 10, os.time())
+	check(
+		"доход за тики: монеты, рыба, вид",
+		gained == 20 and ep.coins == 120 and ep.fish[1].earned == 20 and ep.speciesStats.guppy.earned == 20
+	)
+
+	local op = M._newProfile()
+	local t0 = os.time()
+	op.lastSeen = t0 - 3600
+	op.fish = { { id = 1, species = "guppy", born = t0 - 3700, earned = 0 } } -- на момент lastSeen рыбе 100 сек: малёк, доход 1
+	check("офлайн-доход: 360 тиков × 1", Economy.applyOffline(op, t0) == 360 and op.coins == 460)
+	op.lastSeen = nil
+	check("без lastSeen офлайн-дохода нет", Economy.applyOffline(op, t0) == 0)
 
 	-- ===== Шансы паков =====
 	local PackRoller = require(ServerScriptService.PackRoller)

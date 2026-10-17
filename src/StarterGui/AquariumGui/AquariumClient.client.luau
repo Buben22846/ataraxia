@@ -20,6 +20,7 @@ local fishChangedEvent = remotes:WaitForChild("FishChanged")
 local clientReadyEvent = remotes:WaitForChild("ClientReady")
 local buySlotEvent = remotes:WaitForChild("BuySlot")
 local adminCommandEvent = remotes:WaitForChild("AdminCommand")
+local offlineIncomeEvent = remotes:WaitForChild("OfflineIncome")
 
 local FishConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("FishConfig"))
 
@@ -164,12 +165,13 @@ local toast = make("TextLabel", {
 }, gui)
 local toastToken = 0
 
-local function showToast(text)
+local function showToast(text, color, duration)
 	toastToken += 1
 	local token = toastToken
 	toast.Text = text
+	toast.BackgroundColor3 = color or COLOR_WARN
 	toast.Visible = true
-	task.delay(2, function()
+	task.delay(duration or 2, function()
 		if toastToken == token then
 			toast.Visible = false
 		end
@@ -352,6 +354,32 @@ end)
 -- ===== Шансы пака (всегда показываем игроку) =====
 local oddsPanel = makePanel("OddsPanel")
 
+-- Шансы цветовых вариантов (золотая, радужная) — тоже показываем игроку
+do
+	local totalWeight = 0
+	for _, id in ipairs(FishConfig.VariantOrder) do
+		totalWeight += FishConfig.Variants[id].weight
+	end
+	local parts = {}
+	for _, id in ipairs(FishConfig.VariantOrder) do
+		local variant = FishConfig.Variants[id]
+		if id ~= "normal" then
+			table.insert(parts, variant.emoji .. variant.name .. " " .. formatPercent(variant.weight / totalWeight * 100) .. " (×" .. tostring(variant.mult) .. ")")
+		end
+	end
+	make("TextLabel", {
+		Name = "VariantHint",
+		Position = UDim2.fromScale(0.05, 0.775),
+		Size = UDim2.fromScale(0.9, 0.06),
+		BackgroundTransparency = 1,
+		Text = "Вариант: " .. table.concat(parts, " · "),
+		TextScaled = true,
+		TextColor3 = COLOR_MUTED,
+		Font = FONT,
+		ZIndex = 12,
+	}, oddsPanel.overlay.Card)
+end
+
 oddsButton.Activated:Connect(function()
 	oddsPanel.title.Text = "Шансы: " .. pack.name
 	clearRows(oddsPanel.list)
@@ -495,9 +523,11 @@ local function playReveal(result)
 	revealEmoji.Text = species.emoji
 	revealScale.Scale = 0.4
 	TweenService:Create(revealScale, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
-	revealStroke.Color = rarity.color
+	local variant = FishConfig.variantOf(result.variant)
+	local special = result.variant ~= nil and result.variant ~= "normal"
+	revealStroke.Color = if special then variant.color else rarity.color
 	revealName.Text = species.name
-	revealRarity.Text = rarity.name
+	revealRarity.Text = if special then rarity.name .. " · " .. variant.emoji .. variant.name else rarity.name
 	revealRarity.TextColor3 = rarity.color
 	revealName.Visible = true
 	revealRarity.Visible = true
@@ -539,6 +569,13 @@ packResultEvent.OnClientEvent:Connect(function(result)
 end)
 
 refreshCollection()
+
+-- Доход, пока игрока не было (сервер сам начисляет монеты, мы лишь сообщаем)
+offlineIncomeEvent.OnClientEvent:Connect(function(gained)
+	if typeof(gained) == "number" and gained > 0 then
+		showToast("Пока вас не было: +" .. tostring(gained) .. " монет", COLOR_BUTTON, 5)
+	end
+end)
 
 -- ===== Кнопка продажи (появляется при выборе рыбы) =====
 local sellButton = Instance.new("TextButton")
@@ -617,11 +654,19 @@ local function updateInfo()
 	end
 	local species = fish.species
 	local rarity = FishConfig.Rarities[species.rarity]
-	local age = fish.data.age + (os.clock() - fish.receivedAt) -- возраст с сервера + прошедшее время
-	infoTitle.Text = species.emoji .. " " .. species.name .. " · " .. rarity.name
+	local data = fish.data
+	local age = data.age + (os.clock() - fish.receivedAt) -- возраст с сервера + прошедшее время
+	local stage = FishConfig.stageFor(age)
+	local variant = FishConfig.variantOf(data.variant)
+	local special = data.variant ~= nil and data.variant ~= "normal"
+	local income = FishConfig.incomeOf(data.species, data.variant, age)
+	local sellPrice = FishConfig.sellPriceOf(data.species, data.variant, age)
+	local prefix = if special then variant.emoji .. variant.name .. " " else ""
+	infoTitle.Text = prefix .. species.emoji .. " " .. species.name .. " · " .. rarity.name
 	infoTitle.TextColor3 = rarity.color
-	infoIncome.Text = "Доход: +" .. tostring(species.income) .. " за " .. tostring(FishConfig.INCOME_INTERVAL) .. "с · Продажа: " .. tostring(species.sellPrice)
-	infoStats.Text = "Возраст: " .. formatAge(age) .. " · Заработала: 💰" .. tostring(fish.data.earned)
+	infoIncome.Text = "Доход: +" .. tostring(income) .. " за " .. tostring(FishConfig.INCOME_INTERVAL) .. "с · Продажа: " .. tostring(sellPrice)
+	infoStats.Text = stage.name .. " ×" .. string.format("%g", FishConfig.multiplierOf(data.variant, age)) .. " · Возраст: " .. formatAge(age) .. " · 💰" .. tostring(data.earned)
+	sellButton.Text = species.name .. ": продать (+" .. tostring(sellPrice) .. ")"
 	infoCard.Visible = true
 end
 
@@ -634,9 +679,7 @@ local function refreshSelection()
 		fish.label.BackgroundTransparency = if id == selectedId then 0.7 else 1
 	end
 	if selectedId ~= nil then
-		local species = fishById[selectedId].species
-		sellButton.Text = species.name .. ": продать (+" .. tostring(species.sellPrice) .. ")"
-		sellButton.Visible = true
+		sellButton.Visible = true -- текст кнопки (цену) выставляет updateInfo
 	else
 		sellButton.Visible = false
 	end
@@ -686,6 +729,16 @@ local function swim(fish)
 	end
 end
 
+-- Размер рыбы зависит от стадии роста; при переходе на новую стадию плавно увеличивается
+local function applyLook(fish)
+	local age = fish.data.age + (os.clock() - fish.receivedAt)
+	local target = FishConfig.stageFor(age).scale
+	if fish.lastScale ~= target then
+		fish.lastScale = target
+		TweenService:Create(fish.uiScale, TweenInfo.new(0.8, Enum.EasingStyle.Sine), { Scale = target }):Play()
+	end
+end
+
 local function addFish(fishData)
 	local species = FishConfig.Species[fishData.species] or FishConfig.Species.guppy
 
@@ -706,9 +759,36 @@ local function addFish(fishData)
 	-- Рыба квадратная и не мельчает/не раздувается на разных экранах
 	make("UIAspectRatioConstraint", { AspectRatio = 1, DominantAxis = Enum.DominantAxis.Width }, label)
 	make("UISizeConstraint", { MinSize = Vector2.new(40, 40), MaxSize = Vector2.new(96, 96) }, label)
+	local startScale = FishConfig.stageFor(fishData.age).scale
+	local uiScale = make("UIScale", { Scale = startScale }, label)
 
-	local fish = { label = label, species = species, alive = true, tween = nil, data = fishData, receivedAt = os.clock() }
+	local fish = {
+		label = label,
+		species = species,
+		alive = true,
+		tween = nil,
+		data = fishData,
+		receivedAt = os.clock(),
+		uiScale = uiScale,
+		lastScale = startScale,
+	}
 	fishById[fishData.id] = fish
+
+	-- Особые варианты обводятся цветным кольцом (радужная переливается)
+	if fishData.variant ~= nil and fishData.variant ~= "normal" then
+		local variant = FishConfig.variantOf(fishData.variant)
+		local ring = make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ZIndex = FISH_ZINDEX }, label)
+		make("UICorner", { CornerRadius = UDim.new(0.5, 0) }, ring)
+		local stroke = make("UIStroke", { Color = variant.color, Thickness = 3 }, ring)
+		if fishData.variant == "rainbow" then
+			task.spawn(function()
+				while fish.alive do
+					stroke.Color = Color3.fromHSV((os.clock() * 0.3) % 1, 0.6, 1)
+					task.wait(0.1)
+				end
+			end)
+		end
+	end
 
 	label.Activated:Connect(function()
 		selectFish(fishData.id)
@@ -747,6 +827,7 @@ fishChangedEvent.OnClientEvent:Connect(function(fishList, newSlots)
 		else
 			existing.data = fishData -- обновилась статистика (заработок, возраст)
 			existing.receivedAt = os.clock()
+			applyLook(existing)
 		end
 	end
 
@@ -784,7 +865,7 @@ local function buildAdminPanel()
 
 	local function addButton(order, text, onTap)
 		local button = make("TextButton", {
-			Size = UDim2.fromScale(1, 0.13),
+			Size = UDim2.fromScale(1, 0.11),
 			BackgroundColor3 = COLOR_ROW,
 			BorderSizePixel = 0,
 			Text = text,
@@ -814,18 +895,28 @@ local function buildAdminPanel()
 	end)
 
 	-- Выдача рыбы: каждое нажатие выдаёт показанный вид и переключает на следующий
+	local variantIndex = 1
 	local speciesIndex = 1
 	local function fishButtonText()
 		local species = FishConfig.Species[FishConfig.SpeciesOrder[speciesIndex]]
 		return "Выдать: " .. species.emoji .. " " .. species.name
 	end
 	addButton(4, fishButtonText(), function(button)
-		adminCommandEvent:FireServer("fish", FishConfig.SpeciesOrder[speciesIndex])
+		adminCommandEvent:FireServer("fish", FishConfig.SpeciesOrder[speciesIndex], FishConfig.VariantOrder[variantIndex])
 		speciesIndex = speciesIndex % #FishConfig.SpeciesOrder + 1
 		button.Text = fishButtonText()
 	end)
 
-	addButton(5, "Состарить рыб на 1 час", function()
+	-- Переключатель варианта для кнопки «Выдать»
+	local function variantButtonText()
+		return "Вариант выдачи: " .. FishConfig.Variants[FishConfig.VariantOrder[variantIndex]].name
+	end
+	addButton(5, variantButtonText(), function(button)
+		variantIndex = variantIndex % #FishConfig.VariantOrder + 1
+		button.Text = variantButtonText()
+	end)
+
+	addButton(6, "Состарить рыб на 1 час", function()
 		adminCommandEvent:FireServer("age", 3600)
 	end)
 
@@ -836,7 +927,7 @@ local function buildAdminPanel()
 		button.Text = "Сбросить прогресс"
 		button.BackgroundColor3 = COLOR_ROW
 	end
-	addButton(6, "Сбросить прогресс", function(button)
+	addButton(7, "Сбросить прогресс", function(button)
 		if not resetArmed then
 			resetArmed = true
 			button.Text = "Точно? Нажмите ещё раз"

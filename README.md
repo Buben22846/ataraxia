@@ -12,6 +12,7 @@ Place ID: 76014161027398.
 | `src/ReplicatedStorage/Shared/FishConfig.luau` | ReplicatedStorage.Shared | Каталог рыб, паки, цены мест — весь баланс |
 | `src/ServerScriptService/GameServer.server.luau` | ServerScriptService | Правила игры на сервере, админ-команды |
 | `src/ServerScriptService/PlayerData.luau` | ServerScriptService | Сохранение (DataStore, блокировка сессии, миграции) |
+| `src/ServerScriptService/Economy.luau` | ServerScriptService | Начисление дохода рыб (онлайн и в офлайне) |
 | `src/ServerScriptService/PackRoller.luau` | ServerScriptService | Выпадение рыбы из пака |
 | `src/ServerStorage/Tests/RunAll.luau` | ServerStorage.Tests | Автотесты |
 | `src/StarterGui/AquariumGui/AquariumClient.client.luau` | StarterGui.AquariumGui | Весь интерфейс игрока |

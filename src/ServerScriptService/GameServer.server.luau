@@ -9,6 +9,7 @@ local RunService = game:GetService("RunService")
 local FishConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("FishConfig"))
 local PackRoller = require(ServerScriptService:WaitForChild("PackRoller"))
 local PlayerData = require(ServerScriptService:WaitForChild("PlayerData"))
+local Economy = require(ServerScriptService:WaitForChild("Economy"))
 
 -- ===== НАСТРОЙКИ =====
 -- Число мест в аквариуме хранится в профиле (profile.slots), максимум и цены — в FishConfig.
@@ -24,10 +25,13 @@ local fishChangedEvent = remotes:WaitForChild("FishChanged")
 local clientReadyEvent = remotes:WaitForChild("ClientReady")
 local buySlotEvent = remotes:WaitForChild("BuySlot")
 local adminCommandEvent = remotes:WaitForChild("AdminCommand")
+local offlineIncomeEvent = remotes:WaitForChild("OfflineIncome")
 
 local loaded = {} -- player -> true, когда профиль загружен
 
 local ready = {} -- player -> true, когда клиент подключил обработчики и готов принимать данные
+
+local pendingOffline = {} -- player -> монеты, заработанные в офлайне (покажем при первой отправке состояния)
 
 -- Проверка конфига паков: шансы должны давать в сумме 100%
 for packId, pack in pairs(FishConfig.Packs) do
@@ -64,14 +68,7 @@ local function allow(player, key, ratePerSec, burst)
 end
 
 -- Статистика вида в профиле (создаём, если её ещё нет)
-local function statsFor(profile, speciesId)
-	local stats = profile.speciesStats[speciesId]
-	if stats == nil then
-		stats = { pulled = 0, earned = 0 }
-		profile.speciesStats[speciesId] = stats
-	end
-	return stats
-end
+local statsFor = Economy.statsFor
 
 -- ===== Права администратора =====
 -- В Studio админ — любой тестовый игрок; в опубликованной игре — только владелец и UserId из списка.
@@ -102,6 +99,7 @@ local function sendFish(player, profile)
 		table.insert(list, {
 			id = fish.id,
 			species = fish.species,
+			variant = fish.variant or "normal",
 			age = math.max(0, now - fish.born),
 			earned = fish.earned,
 		})
@@ -129,6 +127,12 @@ local function pushState(player)
 	sendCoins(player, profile)
 	sendFish(player, profile)
 	sendCollection(player, profile)
+
+	local gained = pendingOffline[player]
+	if gained then
+		pendingOffline[player] = nil
+		offlineIncomeEvent:FireClient(player, gained)
+	end
 end
 
 -- ===== Вход / выход =====
@@ -144,6 +148,13 @@ local function onPlayerAdded(player)
 		return
 	end
 	player:SetAttribute("IsAdmin", isAdmin(player)) -- клиент показывает панель, но права всё равно проверяет сервер
+	-- Пока игрока не было, рыбы приносили часть дохода
+	local now = os.time()
+	local gained = Economy.applyOffline(profile, now)
+	profile.lastSeen = now
+	if gained > 0 then
+		pendingOffline[player] = gained
+	end
 	loaded[player] = true
 	if ready[player] then
 		pushState(player)
@@ -154,6 +165,7 @@ local function onPlayerRemoving(player)
 	loaded[player] = nil
 	ready[player] = nil
 	buckets[player] = nil
+	pendingOffline[player] = nil
 	PlayerData.release(player) -- финальное сохранение и снятие блокировки
 end
 
@@ -202,7 +214,8 @@ openPackEvent.OnServerEvent:Connect(function(player, packId)
 	local speciesId, rarity = PackRoller.roll(pack)
 	local fishId = profile.nextFishId
 	profile.nextFishId += 1
-	table.insert(profile.fish, { id = fishId, species = speciesId, born = os.time(), earned = 0 })
+	local variant = FishConfig.rollVariant()
+	table.insert(profile.fish, { id = fishId, species = speciesId, variant = variant, born = os.time(), earned = 0 })
 
 	local isNew = not profile.discovered[speciesId]
 	profile.discovered[speciesId] = true
@@ -212,7 +225,7 @@ openPackEvent.OnServerEvent:Connect(function(player, packId)
 	sendCoins(player, profile)
 	sendFish(player, profile)
 	sendCollection(player, profile)
-	packResultEvent:FireClient(player, { ok = true, species = speciesId, rarity = rarity, isNew = isNew })
+	packResultEvent:FireClient(player, { ok = true, species = speciesId, rarity = rarity, variant = variant, isNew = isNew })
 end)
 
 -- ===== Покупка места в аквариуме =====
@@ -266,8 +279,7 @@ sellFishEvent.OnServerEvent:Connect(function(player, fishId)
 
 	for index, fish in ipairs(profile.fish) do
 		if fish.id == fishId then
-			local species = FishConfig.Species[fish.species]
-			local price = if species then species.sellPrice else 0
+			local price = FishConfig.sellPriceOf(fish.species, fish.variant, os.time() - fish.born)
 			table.remove(profile.fish, index)
 			profile.coins += price
 			sendCoins(player, profile)
@@ -287,7 +299,7 @@ local function isInteger(value)
 	return typeof(value) == "number" and value == value and value == math.floor(value)
 end
 
-adminCommandEvent.OnServerEvent:Connect(function(player, cmd, value)
+adminCommandEvent.OnServerEvent:Connect(function(player, cmd, value, extra)
 	if not isAdmin(player) then
 		return
 	end
@@ -316,13 +328,16 @@ adminCommandEvent.OnServerEvent:Connect(function(player, cmd, value)
 		if typeof(value) ~= "string" or FishConfig.Species[value] == nil then
 			return
 		end
+		if extra ~= nil and (typeof(extra) ~= "string" or FishConfig.Variants[extra] == nil) then
+			return
+		end
 		if #profile.fish >= profile.slots then
 			packResultEvent:FireClient(player, { ok = false, reason = "full" })
 			return
 		end
 		local fishId = profile.nextFishId
 		profile.nextFishId += 1
-		table.insert(profile.fish, { id = fishId, species = value, born = os.time(), earned = 0 })
+		table.insert(profile.fish, { id = fishId, species = value, variant = extra or "normal", born = os.time(), earned = 0 })
 		profile.discovered[value] = true
 		statsFor(profile, value).pulled += 1
 	elseif cmd == "age" then
@@ -353,16 +368,7 @@ task.spawn(function()
 		for _, player in ipairs(Players:GetPlayers()) do
 			local profile = PlayerData.get(player)
 			if profile ~= nil and #profile.fish > 0 then
-				local total = 0
-				for _, fish in ipairs(profile.fish) do
-					local species = FishConfig.Species[fish.species]
-					if species then
-						total += species.income
-						fish.earned += species.income
-						statsFor(profile, fish.species).earned += species.income
-					end
-				end
-				profile.coins += total
+				Economy.applyIncome(profile, 1, os.time())
 				if ready[player] then
 					sendCoins(player, profile)
 					sendFish(player, profile)

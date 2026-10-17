@@ -13,7 +13,7 @@ local FishConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild
 -- ===== НАСТРОЙКИ =====
 -- Studio пишет в отдельное хранилище и никогда не трогает сохранения реальных игроков
 local STORE_NAME = if RunService:IsStudio() then "PlayerData_Studio_v1" else "PlayerData_v1"
-local CURRENT_VERSION = 2
+local CURRENT_VERSION = 3
 local START_COINS = 100 -- стартовые монеты нового игрока
 local AUTOSAVE_INTERVAL = 60 -- секунд между автосохранениями
 local LOCK_TIMEOUT = 150 -- блокировка старше этого считается «мёртвой» (сервер упал)
@@ -72,9 +72,10 @@ local function newProfile()
 		coins = START_COINS,
 		nextFishId = 1,
 		slots = FishConfig.START_SLOTS, -- сколько рыб помещается в аквариум
-		fish = {}, -- { {id, species, born (время покупки, сек), earned (заработано этой рыбой)}, ... }
+		fish = {}, -- { {id, species, variant, born (время покупки, сек), earned (заработано этой рыбой)}, ... }
 		discovered = {}, -- { [speciesId] = true }
 		speciesStats = {}, -- { [speciesId] = { pulled = сколько раз выпала, earned = всего заработано видом } }
+		lastSeen = os.time(), -- время последнего сохранения (для дохода в офлайне)
 	}
 end
 
@@ -83,6 +84,11 @@ end
 local MIGRATIONS = {
 	[1] = function(data)
 		data.slots = data.slots or FishConfig.START_SLOTS
+		return data
+	end,
+	-- v2 -> v3: появилось время последнего сохранения (lastSeen) для дохода в офлайне.
+	[2] = function(data)
+		data.lastSeen = os.time()
 		return data
 	end,
 }
@@ -152,6 +158,7 @@ end
 -- ===== Сохранение =====
 -- release = true: снимаем блокировку (игрок уходит). Иначе обновляем время блокировки.
 local function commit(userId, profile, release)
+	profile.lastSeen = os.time() -- запоминаем, когда игрок «был здесь» в последний раз
 	local lost = false
 	local ok = withRetry(SAVE_ATTEMPTS, function()
 		getStore():UpdateAsync(keyFor(userId), function(old)

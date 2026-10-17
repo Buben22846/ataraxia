@@ -52,6 +52,97 @@ function FishConfig.speciesOfRarity(rarity)
 	return list
 end
 
+-- ===== Рост рыб =====
+-- Рыба растёт со временем: чем она старше, тем больше дохода и цена продажи.
+--   from  — с какого возраста (сек) начинается стадия
+--   mult  — множитель дохода и цены продажи
+--   scale — размер рыбы на экране
+FishConfig.GrowthStages = {
+	{ name = "Малёк", from = 0, mult = 1, scale = 0.8 },
+	{ name = "Подросток", from = 600, mult = 1.5, scale = 0.9 },
+	{ name = "Взрослая", from = 1800, mult = 2, scale = 1 },
+}
+
+-- ===== Цветовые варианты =====
+-- Вариант определяется при выпадении из пака. weight — относительный шанс (сумма = 100, то есть проценты).
+FishConfig.Variants = {
+	normal = { name = "Обычная", mult = 1, weight = 88 },
+	golden = { name = "Золотая", mult = 2, weight = 11, emoji = "✨", color = Color3.fromRGB(255, 202, 40) },
+	rainbow = { name = "Радужная", mult = 5, weight = 1, emoji = "🌈", color = Color3.fromRGB(240, 98, 146) },
+}
+FishConfig.VariantOrder = { "normal", "golden", "rainbow" }
+
+-- ===== Доход в офлайне =====
+-- Пока игрока нет, рыбы приносят OFFLINE_RATE от обычного дохода, но не дольше OFFLINE_MAX секунд.
+FishConfig.OFFLINE_RATE = 0.5
+FishConfig.OFFLINE_MAX = 2 * 3600
+
+local function round(x)
+	return math.floor(x + 0.5)
+end
+
+-- Стадия роста по возрасту в секундах
+function FishConfig.stageFor(age)
+	local result = FishConfig.GrowthStages[1]
+	for _, stage in ipairs(FishConfig.GrowthStages) do
+		if age >= stage.from then
+			result = stage
+		end
+	end
+	return result
+end
+
+-- Вариант по id (у старых рыб варианта нет — считаем обычной)
+function FishConfig.variantOf(variantId)
+	return FishConfig.Variants[variantId or "normal"] or FishConfig.Variants.normal
+end
+
+-- Общий множитель дохода и цены: стадия роста × вариант
+function FishConfig.multiplierOf(variantId, age)
+	return FishConfig.stageFor(age).mult * FishConfig.variantOf(variantId).mult
+end
+
+-- Доход рыбы за один тик
+function FishConfig.incomeOf(speciesId, variantId, age)
+	local species = FishConfig.Species[speciesId]
+	if species == nil then
+		return 0
+	end
+	return round(species.income * FishConfig.multiplierOf(variantId, age))
+end
+
+-- Цена продажи рыбы
+function FishConfig.sellPriceOf(speciesId, variantId, age)
+	local species = FishConfig.Species[speciesId]
+	if species == nil then
+		return 0
+	end
+	return round(species.sellPrice * FishConfig.multiplierOf(variantId, age))
+end
+
+-- Выбор варианта по весам. rng — необязательный Random (для тестов).
+function FishConfig.rollVariant(rng)
+	local total = 0
+	for _, id in ipairs(FishConfig.VariantOrder) do
+		total += FishConfig.Variants[id].weight
+	end
+	local r = (if rng then rng:NextNumber() else math.random()) * total
+	local acc = 0
+	for _, id in ipairs(FishConfig.VariantOrder) do
+		acc += FishConfig.Variants[id].weight
+		if r < acc then
+			return id
+		end
+	end
+	return "normal"
+end
+
+-- Сколько тиков дохода засчитать за elapsed секунд отсутствия (целое число)
+function FishConfig.offlineTicks(elapsed)
+	local capped = math.min(math.max(elapsed, 0), FishConfig.OFFLINE_MAX)
+	return math.floor(capped / FishConfig.INCOME_INTERVAL * FishConfig.OFFLINE_RATE)
+end
+
 -- Места в аквариуме: сколько даётся на старте, максимум и цена каждого следующего места.
 -- Это главный «сток» монет: без него деньги накапливаются без цели.
 FishConfig.START_SLOTS = 5
