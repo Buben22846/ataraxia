@@ -24,6 +24,7 @@ local offlineIncomeEvent = remotes:WaitForChild("OfflineIncome")
 local buyTankEvent = remotes:WaitForChild("BuyTank")
 
 local FishConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("FishConfig"))
+local Sprites = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Sprites"))
 
 -- ===== НАСТРОЙКИ =====
 local FISH_SIZE = UDim2.fromScale(0.16, 0.1) -- высоту задаёт UIAspectRatioConstraint (квадрат по ширине)
@@ -71,6 +72,21 @@ local function speciesChances(pack)
 	end
 	return result
 end
+
+-- Фон аквариума: пиксельная картинка поверх цвета воды (если картинки нет — виден просто цвет)
+local background = make("ImageLabel", {
+	Name = "Background",
+	Size = UDim2.fromScale(1, 1),
+	BackgroundTransparency = 1,
+	ScaleType = Enum.ScaleType.Crop,
+	Visible = false,
+	ZIndex = 1,
+}, tank)
+local function applyBackground(tankId)
+	local key = FishConfig.Tanks[tankId].background
+	background.Visible = key ~= nil and Sprites.apply(background, key, false)
+end
+applyBackground(currentTank)
 
 -- Пак текущего аквариума
 local function currentPack()
@@ -455,6 +471,19 @@ local revealEmoji = make("TextLabel", {
 }, revealCard)
 local revealScale = make("UIScale", { Scale = 1 }, revealEmoji)
 
+-- Картинка рыбы на карточке открытия (если картинки нет — остаётся эмодзи)
+local revealSprite = make("ImageLabel", {
+	Name = "Sprite",
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.fromScale(0.5, 0.04),
+	Size = UDim2.fromScale(0.6, 0.38),
+	BackgroundTransparency = 1,
+	ScaleType = Enum.ScaleType.Fit,
+	Visible = false,
+	ZIndex = 22,
+}, revealCard)
+local revealSpriteScale = make("UIScale", { Scale = 1 }, revealSprite)
+
 local revealName = make("TextLabel", {
 	Name = "FishName",
 	AnchorPoint = Vector2.new(0.5, 0),
@@ -519,6 +548,7 @@ local function playReveal(result)
 	revealEmoji.Text = "❓"
 	revealEmoji.Rotation = 0
 	revealScale.Scale = 1
+	revealSprite.Visible = false
 	revealName.Visible = false
 	revealRarity.Visible = false
 	revealNew.Visible = false
@@ -538,9 +568,14 @@ local function playReveal(result)
 	task.wait(0.12)
 
 	-- Показываем рыбу
-	revealEmoji.Text = species.emoji
+	local hasSprite = Sprites.apply(revealSprite, result.species, false)
+	revealSprite.Visible = hasSprite
+	revealEmoji.Text = if hasSprite then "" else species.emoji
 	revealScale.Scale = 0.4
-	TweenService:Create(revealScale, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+	revealSpriteScale.Scale = 0.4
+	local pop = TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	TweenService:Create(revealScale, pop, { Scale = 1 }):Play()
+	TweenService:Create(revealSpriteScale, pop, { Scale = 1 }):Play()
 	local variant = FishConfig.variantOf(result.variant)
 	local special = result.variant ~= nil and result.variant ~= "normal"
 	revealStroke.Color = if special then variant.color else rarity.color
@@ -731,6 +766,15 @@ local function swim(fish)
 		local distance = math.sqrt(dx * dx + dy * dy)
 		local duration = math.max(distance / FISH_SPEED, 1)
 
+		-- Рыба поворачивается мордой по направлению плавания (картинка нарисована смотрящей вправо)
+		if fish.sprite and dx ~= 0 then
+			local right = dx > 0
+			if right ~= fish.facingRight then
+				fish.facingRight = right
+				Sprites.apply(fish.sprite, fish.data.species, not right)
+			end
+		end
+
 		local tween = TweenService:Create(
 			fish.label,
 			TweenInfo.new(duration, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
@@ -792,6 +836,22 @@ local function addFish(fishData)
 		lastScale = startScale,
 	}
 	fishById[fishData.id] = fish
+
+	-- Пиксельная картинка вида поверх кнопки (если картинки нет — остаётся эмодзи)
+	local spriteLabel = make("ImageLabel", {
+		Name = "Sprite",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Fit,
+		ZIndex = FISH_ZINDEX,
+	}, label)
+	if Sprites.apply(spriteLabel, fishData.species, false) then
+		label.Text = ""
+		fish.sprite = spriteLabel
+		fish.facingRight = true
+	else
+		spriteLabel:Destroy()
+	end
 
 	-- Особые варианты обводятся цветным кольцом (радужная переливается)
 	if fishData.variant ~= nil and fishData.variant ~= "normal" then
@@ -912,6 +972,7 @@ local function switchTank(id)
 	currentTank = id
 	selectedId = nil
 	TweenService:Create(tank, TweenInfo.new(0.6), { BackgroundColor3 = FishConfig.Tanks[id].color }):Play()
+	applyBackground(id)
 	for _, fish in pairs(fishById) do
 		fish.label.Visible = fish.data.tank == currentTank
 	end

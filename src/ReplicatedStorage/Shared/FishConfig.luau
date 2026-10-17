@@ -50,11 +50,12 @@ FishConfig.SpeciesOrder = {
 --   price         — сколько стоит открыть (0 = есть с самого начала)
 --   pack          — id пака этого аквариума (FishConfig.Packs)
 --   slotPriceMult — во сколько раз дороже места, чем в лагуне
---   color         — цвет воды (фон; позже заменим картинкой)
+--   color         — цвет воды (запасной фон)
+--   background     — id пиксельного фона в SpriteData
 FishConfig.Tanks = {
-	lagoon = { name = "Тихая лагуна", emoji = "🌊", price = 0, pack = "lagoon", slotPriceMult = 1, color = Color3.fromRGB(20, 110, 140) },
-	volcano = { name = "Вулканический риф", emoji = "🌋", price = 5000, pack = "volcano", slotPriceMult = 4, color = Color3.fromRGB(105, 36, 28) },
-	arctic = { name = "Ледяной грот", emoji = "❄️", price = 40000, pack = "arctic", slotPriceMult = 10, color = Color3.fromRGB(64, 120, 165) },
+	lagoon = { name = "Тихая лагуна", emoji = "🌊", price = 0, pack = "lagoon", slotPriceMult = 1, color = Color3.fromRGB(20, 110, 140), background = "bg_lagoon" },
+	volcano = { name = "Вулканический риф", emoji = "🌋", price = 5000, pack = "volcano", slotPriceMult = 4, color = Color3.fromRGB(105, 36, 28), background = "bg_volcano" },
+	arctic = { name = "Ледяной грот", emoji = "❄️", price = 40000, pack = "arctic", slotPriceMult = 10, color = Color3.fromRGB(64, 120, 165), background = "bg_arctic" },
 }
 FishConfig.TankOrder = { "lagoon", "volcano", "arctic" }
 
