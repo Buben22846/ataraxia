@@ -62,7 +62,7 @@ local Audio = {
 local MAX_SFX_VOLUME = 0.4
 -- =====================
 
-local Sfx = { enabled = true, sounds = {}, ambient = nil }
+local Sfx = { enabled = true, musicEnabled = true, sounds = {}, ambient = nil }
 
 function Sfx.play(key)
 	if not Sfx.enabled then
@@ -134,7 +134,7 @@ task.spawn(function()
 	local ok = pcall(function()
 		Sfx.ambient = make("Sound", {
 			Name = "Ambient",
-			Volume = if Sfx.enabled then math.min(Audio.AmbientVolume, MAX_SFX_VOLUME) else 0,
+			Volume = math.min(Audio.AmbientVolume, MAX_SFX_VOLUME),
 			Looped = false,
 		}, gui)
 	end)
@@ -154,6 +154,9 @@ task.spawn(function()
 			local sound = Sfx.ambient
 			sound.SoundId = id
 			sound:Play()
+			if not Sfx.musicEnabled then
+				sound:Pause() -- музыка выключена в настройках: трек стоит, пока её не включат
+			end
 			local started = os.clock()
 			-- ждём конец трека; если за 15 секунд он так и не начал играть, трек не загрузился
 			local ended = false
@@ -178,6 +181,7 @@ task.spawn(function()
 	end
 end)
 
+-- Звуки (нажатия, пак, награды) включаются отдельно от музыки
 function Sfx.setEnabled(value)
 	Sfx.enabled = value
 	pcall(function()
@@ -186,8 +190,19 @@ function Sfx.setEnabled(value)
 				sound:Stop()
 			end
 		end
+	end)
+end
+
+-- Фоновая музыка: выключенная ставится на паузу, включённая продолжает с того же места
+function Sfx.setMusic(value)
+	Sfx.musicEnabled = value
+	pcall(function()
 		if Sfx.ambient then
-			Sfx.ambient.Volume = if value then math.min(Audio.AmbientVolume, MAX_SFX_VOLUME) else 0
+			if value then
+				Sfx.ambient:Resume()
+			else
+				Sfx.ambient:Pause()
+			end
 		end
 	end)
 end
@@ -344,14 +359,7 @@ local giftDot = make("Frame", {
 make("UICorner", { CornerRadius = UDim.new(0.5, 0) }, giftDot)
 make("UIStroke", { Color = WHITE, Thickness = 1.5 }, giftDot)
 
-local soundButton = iconButton("SoundButton", "🔊", 0.88)
-soundButton.Activated:Connect(function()
-	Sfx.setEnabled(not Sfx.enabled)
-	soundButton.Text = if Sfx.enabled then "🔊" else "🔇"
-	if Sfx.enabled then
-		Sfx.click()
-	end
-end)
+local soundButton = iconButton("SoundButton", "🎧", 0.88) -- открывает настройки звука (см. блок «Настройки» ниже)
 
 -- ===== Монеты и покупка пака =====
 buyButton.AnchorPoint = Vector2.new(0.5, 1)
@@ -1565,6 +1573,107 @@ task.spawn(function()
 end)
 
 pcall(Daily.build)
+
+-- ===== Настройки звука =====
+-- Две независимые галочки: «Звуки» (эффекты) и «Музыка». Состояние хранит сервер в профиле игрока (событие Settings).
+-- Весь блок в do ... end, чтобы не расходовать лимит локальных переменных главной функции.
+do
+	local settingsEvent = remotes:WaitForChild("Settings", 10) -- nil, если события нет: настройки работают только до выхода
+	local settingsPanel = makePanel("SettingsPanel")
+	settingsPanel.title.Text = T("settings_title")
+	settingsPanel.list.Size = UDim2.fromScale(0.9, 0.4)
+	local toggles = {} -- { sfx = кнопка, music = кнопка }
+
+	local function paint(key, value)
+		local button = toggles[key]
+		if button ~= nil then
+			button.Text = if value then T("settings_on") else T("settings_off")
+			button.BackgroundColor3 = if value then COLOR_BUTTON else COLOR_MUTED
+		end
+	end
+
+	local function save()
+		if settingsEvent ~= nil then
+			settingsEvent:FireServer({ sfx = Sfx.enabled, music = Sfx.musicEnabled })
+		end
+	end
+
+	local function addToggleRow(order, key, labelKey, get, set)
+		local row = make("Frame", {
+			Size = UDim2.fromScale(1, 0.45),
+			BackgroundColor3 = COLOR_ROW,
+			BorderSizePixel = 0,
+			LayoutOrder = order,
+			ZIndex = 12,
+		}, settingsPanel.list)
+		make("UICorner", { CornerRadius = UDim.new(0.12, 0) }, row)
+		make("TextLabel", {
+			Name = "Title",
+			Position = UDim2.fromScale(0.04, 0.2),
+			Size = UDim2.fromScale(0.55, 0.6),
+			BackgroundTransparency = 1,
+			Text = T(labelKey),
+			TextScaled = true,
+			MinText = 12,
+			MaxText = 24,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextColor3 = WHITE,
+			Font = FONT,
+			ZIndex = 13,
+		}, row)
+		local button = make("TextButton", {
+			Name = "Toggle",
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.fromScale(0.96, 0.5),
+			Size = UDim2.fromScale(0.3, 0.64),
+			BorderSizePixel = 0,
+			TextScaled = true,
+			MinText = 12,
+			MaxText = 22,
+			TextColor3 = WHITE,
+			Font = FONT,
+			ZIndex = 13,
+		}, row)
+		make("UICorner", { CornerRadius = UDim.new(0.25, 0) }, button)
+		toggles[key] = button
+		paint(key, get())
+		button.Activated:Connect(function()
+			set(not get())
+			paint(key, get())
+			save()
+		end)
+	end
+
+	addToggleRow(1, "sfx", "settings_sfx", function()
+		return Sfx.enabled
+	end, function(value)
+		Sfx.setEnabled(value)
+		if value then
+			Sfx.click()
+		end
+	end)
+	addToggleRow(2, "music", "settings_music", function()
+		return Sfx.musicEnabled
+	end, function(value)
+		Sfx.setMusic(value)
+	end)
+
+	soundButton.Activated:Connect(function()
+		settingsPanel.overlay.Visible = true
+	end)
+
+	if settingsEvent ~= nil then
+		settingsEvent.OnClientEvent:Connect(safely("Settings", function(value)
+			if typeof(value) ~= "table" then
+				return
+			end
+			Sfx.setEnabled(value.sfx ~= false)
+			Sfx.setMusic(value.music ~= false)
+			paint("sfx", Sfx.enabled)
+			paint("music", Sfx.musicEnabled)
+		end))
+	end
+end
 
 -- ===== Магазин за Robux =====
 -- Клиент только рисует кнопки и открывает окна подтверждения Roblox. Ничего не списывается и не выдаётся здесь:

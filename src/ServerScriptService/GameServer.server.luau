@@ -36,6 +36,7 @@ local claimDailyEvent = remotes:WaitForChild("ClaimDaily")
 local dailyStateEvent = remotes:WaitForChild("DailyState")
 local tutorialDoneEvent = remotes:WaitForChild("TutorialDone")
 local shopStateEvent = remotes:WaitForChild("ShopState")
+local settingsEvent = remotes:WaitForChild("Settings")
 
 -- ===== Покупки за Robux =====
 -- Геймпасс «x2 монеты» проверяем у MarketplaceService при входе и после покупки; результат помним на сервере.
@@ -208,6 +209,7 @@ local function pushState(player)
 	dailyStateEvent:FireClient(player, DailyReward.state(profile, os.time()))
 	tutorialDoneEvent:FireClient(player, profile.tutorialDone)
 	sendShopState(player)
+	settingsEvent:FireClient(player, profile.settings)
 
 	local gained = pendingOffline[player]
 	if gained then
@@ -351,6 +353,21 @@ tutorialDoneEvent.OnServerEvent:Connect(function(player)
 	end
 	profile.tutorialDone = true
 	trackStep(player, 3)
+end)
+
+-- ===== Настройки звука (клиент присылает две галочки; ничего, кроме true/false, не принимаем) =====
+settingsEvent.OnServerEvent:Connect(function(player, value)
+	if not allow(player, "Settings", 2, 4) then
+		return
+	end
+	local profile = PlayerData.get(player)
+	if profile == nil or typeof(value) ~= "table" then
+		return
+	end
+	if typeof(value.sfx) ~= "boolean" or typeof(value.music) ~= "boolean" then
+		return
+	end
+	profile.settings = { sfx = value.sfx, music = value.music }
 end)
 
 -- ===== Покупка места в аквариуме =====
