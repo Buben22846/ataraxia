@@ -761,7 +761,7 @@ return function()
 		for _ in pairs(stores) do
 			writes += 1
 		end
-		check("лидеры: нулевые очки не пишутся", stores[Leaderboards.storeName("museum", T0)].data["9002"] == nil and writes == 3)
+		check("лидеры: нулевые очки не пишутся", (stores[Leaderboards.storeName("museum", T0)] or { data = {} }).data["9001"] == 2 and (stores[Leaderboards.storeName("museum", T0)] or { data = {} }).data["9002"] == nil and writes == 3)
 		check("лидеры: неделя кончается в пределах 7 дней", Leaderboards.weekLeft(T0) > 0 and Leaderboards.weekLeft(T0) <= 7 * 86400)
 		Leaderboards.forget(9001)
 		Leaderboards.forget(9002)
