@@ -926,6 +926,177 @@ local revealClose = make("TextButton", {
 }, revealCard)
 make("UICorner", { CornerRadius = UDim.new(0.25, 0) }, revealClose)
 
+-- ===== Рулетка открытия пака =====
+-- Полоса карточек едет влево и замедляется, останавливаясь выпавшей рыбой под указателем.
+-- Результат уже решён сервером: рулетка только красиво его показывает. Карточки-«наполнители» берутся
+-- из того же пака по его шансам; виды, которых игрок ещё не находил, показываются тёмным силуэтом «???».
+local Roulette = {}
+do
+	local CARDS = 34 -- карточек на полосе
+	local TARGET = 29 -- на какой остановимся
+	local SPIN_TIME = 4.2
+	local band = make("Frame", {
+		Name = "Roulette",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(1, 0.2),
+		BackgroundColor3 = Color3.fromRGB(16, 30, 44),
+		BackgroundTransparency = 0.1,
+		BorderSizePixel = 0,
+		ClipsDescendants = true,
+		Visible = false,
+		ZIndex = 22,
+	}, reveal)
+	local strip = make("Frame", {
+		Name = "Strip",
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 22,
+	}, band)
+	-- указатели сверху и снизу (золотые треугольники)
+	for _, top in ipairs({ true, false }) do
+		make("TextLabel", {
+			Name = if top then "PointerTop" else "PointerBottom",
+			AnchorPoint = Vector2.new(0.5, if top then 0 else 1),
+			Position = UDim2.fromScale(0.5, if top then 0 else 1),
+			Size = UDim2.fromScale(0.08, 0.22),
+			BackgroundTransparency = 1,
+			Text = if top then "▼" else "▲",
+			TextScaled = true,
+			TextColor3 = COLOR_GOLD,
+			ZIndex = 26,
+		}, band)
+	end
+	make("Frame", { -- тонкая центральная линия
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.fromScale(0.5, 0),
+		Size = UDim2.new(0, 2, 1, 0),
+		BackgroundColor3 = COLOR_GOLD,
+		BackgroundTransparency = 0.4,
+		BorderSizePixel = 0,
+		ZIndex = 25,
+	}, band)
+
+	-- Случайный вид из пака аквариума по шансам редкостей (только для вида, не влияет на результат)
+	local function fillerSpecies(tankId)
+		local pack = FishConfig.Packs[FishConfig.Tanks[tankId].pack]
+		local roll = math.random() * 100
+		local acc = 0
+		for _, rarity in ipairs(FishConfig.RarityOrder) do
+			acc += pack.odds[rarity] or 0
+			if roll < acc then
+				local pool = FishConfig.speciesOfRarity(rarity, tankId)
+				if #pool > 0 then
+					return pool[math.random(1, #pool)]
+				end
+			end
+		end
+		local all = FishConfig.speciesOfTank(tankId)
+		return all[math.random(1, #all)]
+	end
+
+	local function makeCard(index, speciesId, known, cardW, gap)
+		local species = FishConfig.Species[speciesId]
+		local rarity = FishConfig.Rarities[species.rarity]
+		local card = make("Frame", {
+			Name = "Card" .. index,
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, (index - 1) * (cardW + gap), 0.5, 0),
+			Size = UDim2.new(0, cardW, 0.86, 0),
+			BackgroundColor3 = rarity.color:Lerp(Color3.new(0, 0, 0), 0.72),
+			BorderSizePixel = 0,
+			ZIndex = 23,
+		}, strip)
+		make("UICorner", { CornerRadius = UDim.new(0.08, 0) }, card)
+		make("UIStroke", { Color = rarity.color, Thickness = 2 }, card)
+		local image = make("ImageLabel", {
+			Name = "Fish",
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.fromScale(0.5, 0.06),
+			Size = UDim2.fromScale(0.8, 0.62),
+			BackgroundTransparency = 1,
+			ScaleType = Enum.ScaleType.Fit,
+			ImageColor3 = if known then WHITE else Color3.new(0, 0, 0),
+			ZIndex = 24,
+		}, card)
+		image.ResampleMode = Enum.ResamplerMode.Pixelated
+		if not Sprites.apply(image, speciesId, false) then
+			image:Destroy()
+			make("TextLabel", {
+				AnchorPoint = Vector2.new(0.5, 0),
+				Position = UDim2.fromScale(0.5, 0.06),
+				Size = UDim2.fromScale(0.8, 0.62),
+				BackgroundTransparency = 1,
+				Text = if known then species.emoji else "❓",
+				TextScaled = true,
+				ZIndex = 24,
+			}, card)
+		end
+		make("TextLabel", {
+			Name = "Name",
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.fromScale(0.5, 0.96),
+			Size = UDim2.fromScale(0.92, 0.26),
+			BackgroundTransparency = 1,
+			Text = if known then Strings.species(speciesId) else "???",
+			TextScaled = true,
+			TextColor3 = rarity.color,
+			Font = FONT,
+			ZIndex = 24,
+		}, card)
+		return card
+	end
+
+	-- Крутит рулетку и ждёт, пока она остановится. result.species — выпавшая рыба.
+	function Roulette.spin(result)
+		local species = FishConfig.Species[result.species]
+		if species == nil then
+			return
+		end
+		strip:ClearAllChildren()
+		band.Visible = true
+		task.wait() -- дать посчитаться размерам
+		local bandW, bandH = band.AbsoluteSize.X, band.AbsoluteSize.Y
+		local cardW = math.max(40, math.floor(bandH * 0.72))
+		local gap = math.max(4, math.floor(cardW * 0.08))
+		for index = 1, CARDS do
+			local id = if index == TARGET then result.species else fillerSpecies(species.tank)
+			local known = index == TARGET or discovered[id] ~= nil
+			makeCard(index, id, known, cardW, gap)
+		end
+		local step = cardW + gap
+		-- небольшой случайный сдвиг внутри карточки, чтобы остановка не была всегда ровно по центру
+		local jitter = math.random(-math.floor(cardW * 0.3), math.floor(cardW * 0.3))
+		local finalX = -((TARGET - 1) * step + cardW / 2 - bandW / 2 + jitter)
+		strip.Position = UDim2.new(0, 0, 0, 0)
+		local tween = TweenService:Create(strip, TweenInfo.new(SPIN_TIME, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+			Position = UDim2.new(0, finalX, 0, 0),
+		})
+		-- щелчок каждый раз, когда под указателем проходит новая карточка
+		local lastIndex = -1
+		local RunService = game:GetService("RunService")
+		local connection = RunService.Heartbeat:Connect(function()
+			local passed = math.floor((-strip.Position.X.Offset + bandW / 2) / step)
+			if passed ~= lastIndex then
+				lastIndex = passed
+				Sfx.click()
+			end
+		end)
+		tween:Play()
+		tween.Completed:Wait()
+		connection:Disconnect()
+		-- выделяем выигрышную карточку
+		local winner = strip:FindFirstChild("Card" .. TARGET)
+		if winner then
+			local pulse = make("UIScale", { Scale = 1 }, winner)
+			TweenService:Create(pulse, TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out, 0, true), { Scale = 1.12 }):Play()
+		end
+		task.wait(0.55)
+		band.Visible = false
+		strip:ClearAllChildren()
+	end
+end
+
 local function playReveal(result)
 	revealBusy = true
 	local species = FishConfig.Species[result.species] or FishConfig.Species.guppy
@@ -945,17 +1116,14 @@ local function playReveal(result)
 	reveal.Visible = true
 	Sfx.play("open")
 
-	-- «Трясём» загадочный знак (при быстром открытии пачки паков пропускаем)
-	local wobble = TweenInfo.new(0.12, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+	-- Рулетка (при быстром открытии пачки паков пропускаем)
 	if not result.fast then
-		for _ = 1, 4 do
-			TweenService:Create(revealEmoji, wobble, { Rotation = -15 }):Play()
-			task.wait(0.12)
-			TweenService:Create(revealEmoji, wobble, { Rotation = 15 }):Play()
-			task.wait(0.12)
+		revealCard.Visible = false
+		local ok, err = pcall(Roulette.spin, result)
+		if not ok then
+			warn("[Roulette] " .. tostring(err))
 		end
-		TweenService:Create(revealEmoji, wobble, { Rotation = 0 }):Play()
-		task.wait(0.12)
+		revealCard.Visible = true
 	end
 
 	-- Показываем рыбу
