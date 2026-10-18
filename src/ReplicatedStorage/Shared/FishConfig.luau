@@ -159,10 +159,10 @@ FishConfig.Shop = {
 	DoubleCoins = { passId = 2040116972, mult = 2 }, -- Poseidon's Blessing
 	NightWatch = { passId = 0, offlineMax = 12 * 3600 }, -- Night Watchman
 	SecondHall = { passId = 0, extraQueue = 3 }, -- Second Hall
-	QuickOpen = { passId = 0, packs = 3 }, -- Quick Open
+	QuickOpen = { passId = 2037243513, packs = 3 }, -- Quick Open
 	StarterPack = {
 		key = "starter",
-		productId = 0, -- Starter Pack
+		productId = 3719356682, -- Starter Pack
 		seconds = 2 * 3600,
 		tickets = 10,
 		fish = { species = "puffer", variant = "golden", tank = "lagoon" },
