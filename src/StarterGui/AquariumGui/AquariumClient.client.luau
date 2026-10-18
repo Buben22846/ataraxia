@@ -305,6 +305,9 @@ local function currentPack()
 end
 local totalSpecies = #FishConfig.SpeciesOrder
 local discovered = {} -- id вида -> true (собранные виды, присылает сервер)
+-- Подсказки (ожидание монет, полная офлайн-копилка): реальный код задаёт блок магазина ниже, пока это заглушки.
+-- noCoins() возвращает true, если сам показал подсказку и обычное сообщение не нужно.
+local Hints = { noCoins = function() return false end, offline = function(gained, capped) end }
 local setsState = {} -- наборы коллекции от сервера: { [tankId] = { bonus, tiers = { {have, need, done, bonus}, ... } } }
 local revealBusy = false -- идёт анимация открытия пака
 local pendingReveals = {} -- очередь результатов, если они пришли во время анимации
@@ -569,6 +572,36 @@ local function makePanel(name)
 	end)
 
 	return { overlay = overlay, card = card, title = title, list = list, close = close }
+end
+
+-- Прокручиваемые списки: окно с большим числом строк (магазин, музей). Высоту строк задаём в пикселях (доля от высоты списка),
+-- потому что у прокручиваемого списка доли высоты считать нельзя: размер холста зависит от самих строк.
+local ListKit = {}
+function ListKit.scroll(panel)
+	local old = panel.list
+	local scroll = Instance.new("ScrollingFrame")
+	scroll.Name = "List"
+	scroll.Position = old.Position
+	scroll.Size = old.Size
+	scroll.BackgroundTransparency = 1
+	scroll.BorderSizePixel = 0
+	scroll.ScrollBarThickness = 4
+	scroll.CanvasSize = UDim2.new()
+	scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	scroll.ScrollingDirection = Enum.ScrollingDirection.Y
+	scroll.ZIndex = old.ZIndex
+	make("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, scroll)
+	scroll.Parent = old.Parent
+	old:Destroy()
+	panel.list = scroll
+	return scroll
+end
+function ListKit.rowSize(list, fraction)
+	local height = list.AbsoluteSize.Y
+	if height < 50 then
+		height = 420 -- размер ещё не посчитан
+	end
+	return UDim2.new(1, 0, 0, math.floor(height * fraction))
 end
 
 -- Подсказка под списком (до двух строк)
@@ -877,16 +910,18 @@ local function playReveal(result)
 	reveal.Visible = true
 	Sfx.play("open")
 
-	-- «Трясём» загадочный знак
+	-- «Трясём» загадочный знак (при быстром открытии пачки паков пропускаем)
 	local wobble = TweenInfo.new(0.12, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-	for _ = 1, 4 do
-		TweenService:Create(revealEmoji, wobble, { Rotation = -15 }):Play()
-		task.wait(0.12)
-		TweenService:Create(revealEmoji, wobble, { Rotation = 15 }):Play()
+	if not result.fast then
+		for _ = 1, 4 do
+			TweenService:Create(revealEmoji, wobble, { Rotation = -15 }):Play()
+			task.wait(0.12)
+			TweenService:Create(revealEmoji, wobble, { Rotation = 15 }):Play()
+			task.wait(0.12)
+		end
+		TweenService:Create(revealEmoji, wobble, { Rotation = 0 }):Play()
 		task.wait(0.12)
 	end
-	TweenService:Create(revealEmoji, wobble, { Rotation = 0 }):Play()
-	task.wait(0.12)
 
 	-- Показываем рыбу
 	local hasSprite = Sprites.apply(revealSprite, result.species, false)
@@ -946,7 +981,9 @@ packResultEvent.OnClientEvent:Connect(function(result)
 	elseif result.reason == "full" then
 		showToast(T("toast_full"))
 	elseif result.reason == "coins" then
-		showToast(T("toast_coins"))
+		if not Hints.noCoins() then
+			showToast(T("toast_coins"))
+		end
 	elseif result.reason == "merge" then
 		showToast(T("toast_merge_fail"))
 	end
@@ -955,9 +992,10 @@ end)
 refreshCollection()
 
 -- Доход, пока игрока не было (сервер сам начисляет монеты, мы лишь сообщаем)
-offlineIncomeEvent.OnClientEvent:Connect(function(gained)
+offlineIncomeEvent.OnClientEvent:Connect(function(gained, capped)
 	if typeof(gained) == "number" and gained > 0 then
 		showToast(T("toast_offline", gained), COLOR_BUTTON, 5)
+		Hints.offline(gained, capped == true)
 	end
 end)
 
@@ -1251,11 +1289,12 @@ do
 	local museumPanel = makePanel("MuseumPanel")
 	addHint(museumPanel, T("museum_hint"))
 	museumPanel.list.Size = UDim2.fromScale(0.9, 0.6)
+	ListKit.scroll(museumPanel) -- со вторым залом в очереди 6 гостей, список прокручивается
 
 	-- Строка: слева текст в две строки, справа кнопка (enabled — зелёная, иначе серая)
 	local function addMuseumRow(order, leftText, leftColor, buttonText, enabled, onClick)
 		local row = make("Frame", {
-			Size = UDim2.fromScale(1, 0.17),
+			Size = ListKit.rowSize(museumPanel.list, 0.3),
 			BackgroundColor3 = COLOR_ROW,
 			BorderSizePixel = 0,
 			LayoutOrder = order,
@@ -2030,17 +2069,19 @@ end
 
 -- ===== Магазин за Robux =====
 -- Клиент только рисует кнопки и открывает окна подтверждения Roblox. Ничего не списывается и не выдаётся здесь:
--- пасс и монеты выдаёт сервер, а состояние пасса приходит событием ShopState { doubleCoins = boolean }.
+-- пассы, монеты и стартовый набор выдаёт сервер, а состояние приходит событием ShopState
+-- { doubleCoins, nightWatch, secondHall, quickOpen, restricted, starter = секунд до конца предложения }.
 -- Пока в FishConfig.Shop все id равны 0, кнопка магазина скрыта. Цену в Robux не показываем: её покажет Roblox.
 -- Весь блок в do ... end, чтобы не расходовать лимит локальных переменных главной функции.
 do
 	local MarketplaceService = game:GetService("MarketplaceService")
 	local shopStateEvent = remotes:WaitForChild("ShopState", 10) -- nil, если события нет: остальной интерфейс не страдает
 
-	local Shop = { state = nil, lastPrompt = 0 }
+	local Shop = { state = nil, lastPrompt = 0, starterShown = false }
 	local shopPanel = makePanel("ShopPanel")
 	shopPanel.title.Text = T("shop_title")
 	shopPanel.list.Size = UDim2.fromScale(0.9, 0.7)
+	ListKit.scroll(shopPanel)
 	local shopButton = iconButton("ShopButton", "🛒", 0.725)
 
 	-- Маленький значок «×2» у монет (на нижнем крае, чтобы не закрывать число)
@@ -2062,12 +2103,17 @@ do
 	}, coinsLabel)
 	make("UICorner", { CornerRadius = UDim.new(0.3, 0) }, doubleBadge)
 
-	local function passId()
-		local pass = FishConfig.Shop and FishConfig.Shop.DoubleCoins
-		return if pass then (tonumber(pass.passId) or 0) else 0
+	-- Пассы: у каждого свой id в FishConfig.Shop, название и описание в Strings
+	local PASS_ROWS = {
+		{ key = "nightWatch", cfg = FishConfig.Shop.NightWatch, title = "shop_night_title", desc = "shop_night_desc" },
+		{ key = "secondHall", cfg = FishConfig.Shop.SecondHall, title = "shop_hall_title", desc = "shop_hall_desc" },
+		{ key = "quickOpen", cfg = FishConfig.Shop.QuickOpen, title = "shop_quick_title", desc = "shop_quick_desc" },
+	}
+	local function configuredPass(cfg)
+		return cfg ~= nil and (tonumber(cfg.passId) or 0) > 0
 	end
 
-	-- Товары, у которых id уже настроен
+	-- Товары «монеты», у которых id уже настроен
 	local function activeProducts()
 		local result = {}
 		local products = FishConfig.Shop and FishConfig.Shop.Products
@@ -2084,8 +2130,33 @@ do
 		return Shop.state == nil or Shop.state.restricted ~= false
 	end
 
+	local function owned(key)
+		return Shop.state ~= nil and Shop.state.owned[key] == true
+	end
+
+	-- Сколько секунд ещё действует предложение стартового набора (nil, если его нет)
+	local function starterSecondsLeft()
+		local state = Shop.state
+		if state == nil or state.starterLeft == nil then
+			return nil
+		end
+		local left = state.starterLeft - (os.clock() - state.receivedAt)
+		return if left > 0 then left else nil
+	end
+
 	local function isConfigured()
-		return not isRestricted() and (passId() > 0 or #activeProducts() > 0)
+		if isRestricted() then
+			return false
+		end
+		if configuredPass(FishConfig.Shop.DoubleCoins) or #activeProducts() > 0 or starterSecondsLeft() ~= nil then
+			return true
+		end
+		for _, row in ipairs(PASS_ROWS) do
+			if configuredPass(row.cfg) then
+				return true
+			end
+		end
+		return false
 	end
 
 	-- Форма слова по числу: ru — 1 / 2-4 / 5+, en — 1 / остальные (ключи prefix_1, prefix_2, prefix_5)
@@ -2131,18 +2202,20 @@ do
 		end
 	end
 
-	-- Строка магазина: слева название и описание, справа кнопка «Купить» (или «✓ Куплено», если owned)
-	-- opts (необязательно): banner — золотой баннер главного предложения с лентой «Выгодно»; icon — имя картинки слева (монета)
-	local function addShopRow(order, height, titleText, descText, owned, onBuy, opts)
+	-- Строка магазина: слева название и описание, справа кнопка «Купить» (или «Куплено», если owned).
+	-- opts (необязательно): banner — золотой баннер с лентой; icon — картинка слева (монета); ribbonText — текст ленты;
+	-- parent — куда вставить строку (по умолчанию список магазина).
+	local function addShopRow(order, fraction, titleText, descText, isOwned, onBuy, opts)
 		opts = opts or {}
 		local banner = opts.banner == true
+		local parent = opts.parent or shopPanel.list
 		local row = make("Frame", {
-			Size = UDim2.fromScale(1, height),
+			Size = ListKit.rowSize(parent, fraction),
 			BackgroundColor3 = if banner then COLOR_GOLD else COLOR_ROW,
 			BorderSizePixel = 0,
 			LayoutOrder = order,
 			ZIndex = 12,
-		}, shopPanel.list)
+		}, parent)
 		make("UICorner", { CornerRadius = UDim.new(0.12, 0) }, row)
 		UIKit.frame(row, if banner then "ui_banner" else "ui_row")
 		local textX = 0.03
@@ -2168,7 +2241,7 @@ do
 		local titleColor = if banner then Color3.fromRGB(60, 40, 0) else COLOR_GOLD
 		local descColor = if banner then Color3.fromRGB(95, 62, 0) else Color3.fromRGB(190, 220, 230)
 		if banner then
-			-- лента «Выгодно» на верхней кромке баннера
+			-- лента на верхней кромке баннера
 			local ribbon = make("TextLabel", {
 				Name = "Ribbon",
 				AnchorPoint = Vector2.new(1, 0.5),
@@ -2176,7 +2249,7 @@ do
 				Size = UDim2.fromScale(0.34, 0.26),
 				BackgroundColor3 = COLOR_ALERT,
 				BorderSizePixel = 0,
-				Text = T("shop_best"),
+				Text = opts.ribbonText or T("shop_best"),
 				TextScaled = true,
 				MinText = 8,
 				MaxText = 16,
@@ -2192,7 +2265,7 @@ do
 			BackgroundTransparency = 1,
 			Text = titleText,
 			TextScaled = true,
-			MinText = 12,
+			MinText = 9,
 			MaxText = 22,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			TextColor3 = titleColor,
@@ -2207,7 +2280,7 @@ do
 			Text = descText,
 			TextScaled = true,
 			TextWrapped = true,
-			MinText = 10,
+			MinText = 8,
 			MaxText = 15,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			TextYAlignment = Enum.TextYAlignment.Top,
@@ -2215,7 +2288,7 @@ do
 			Font = FONT,
 			ZIndex = 13,
 		}, row)
-		if owned then
+		if isOwned then
 			make("TextLabel", {
 				Name = "Owned",
 				Position = UDim2.fromScale(0.68, 0.2),
@@ -2223,7 +2296,7 @@ do
 				BackgroundTransparency = 1,
 				Text = T("shop_owned"),
 				TextScaled = true,
-				MinText = 11,
+				MinText = 10,
 				MaxText = 20,
 				TextColor3 = COLOR_BUTTON,
 				Font = FONT,
@@ -2238,7 +2311,7 @@ do
 				BorderSizePixel = 0,
 				Text = T("shop_buy"),
 				TextScaled = true,
-				MinText = 11,
+				MinText = 10,
 				MaxText = 22,
 				TextColor3 = WHITE,
 				Font = FONT,
@@ -2249,68 +2322,236 @@ do
 		end
 	end
 
+	local function buyPass(cfg)
+		return function()
+			prompt("PromptGamePassPurchase", function()
+				MarketplaceService:PromptGamePassPurchase(localPlayer, cfg.passId)
+			end)
+		end
+	end
+	local function buyProduct(productId)
+		return function()
+			prompt("PromptProductPurchase", function()
+				MarketplaceService:PromptProductPurchase(localPlayer, productId)
+			end)
+		end
+	end
+
 	function Shop.refresh()
 		clearRows(shopPanel.list)
 		shopButton.Visible = isConfigured()
 		if isRestricted() then
 			return
 		end
-		local pass = passId()
-		local products = activeProducts()
-		local count = #products + (if pass > 0 then 1 else 0)
-		if count == 0 then
-			return
-		end
-		local height = math.min(0.3, (1 - 0.02 * (count - 1)) / count)
-		local bannerHeight = height
-		if pass > 0 and #products > 0 then
-			-- главное предложение выше остальных; на строки товаров остаётся остальное место
-			bannerHeight = 0.36
-			height = math.min(0.3, (1 - bannerHeight - 0.02 * count) / #products)
-		end
 		local order = 0
 
-		if pass > 0 then
+		-- Главное предложение: Poseidon's Blessing (доход ×2)
+		if configuredPass(FishConfig.Shop.DoubleCoins) then
 			order += 1
-			local owned = Shop.state ~= nil and Shop.state.doubleCoins == true
-			addShopRow(order, bannerHeight, T("shop_double_title"), T("shop_double_desc"), owned, function()
-				prompt("PromptGamePassPurchase", function()
-					MarketplaceService:PromptGamePassPurchase(localPlayer, pass)
-				end)
-			end, { banner = true })
+			addShopRow(order, 0.36, T("shop_double_title"), T("shop_double_desc"), owned("doubleCoins"), buyPass(FishConfig.Shop.DoubleCoins), { banner = true })
 		end
 
-		for _, product in ipairs(products) do
+		-- Стартовый набор (разовое предложение с реальным таймером)
+		local starterLeft = starterSecondsLeft()
+		if starterLeft ~= nil then
 			order += 1
-			local productId = product.productId
+			addShopRow(order, 0.3, T("shop_starter_title"), T("shop_starter_desc"), false, buyProduct(FishConfig.Shop.StarterPack.productId), { icon = "ui_coin" })
+		end
+
+		-- Остальные пассы
+		for _, row in ipairs(PASS_ROWS) do
+			if configuredPass(row.cfg) then
+				order += 1
+				addShopRow(order, 0.28, T(row.title), T(row.desc), owned(row.key), buyPass(row.cfg))
+			end
+		end
+
+		-- Монеты за Robux
+		for _, product in ipairs(activeProducts()) do
+			order += 1
 			local duration = durationText(product.seconds)
-			addShopRow(order, height, T("shop_coins_title", duration), T("shop_coins_desc", duration), false, function()
-				prompt("PromptProductPurchase", function()
-					MarketplaceService:PromptProductPurchase(localPlayer, productId)
-				end)
-			end, { icon = "ui_coin" })
+			addShopRow(order, 0.28, T("shop_coins_title", duration), T("shop_coins_desc", duration), false, buyProduct(product.productId), { icon = "ui_coin" })
 		end
 	end
 
 	shopButton.Visible = isConfigured()
-	shopButton.Activated:Connect(function()
+	local function openShop()
 		Shop.refresh()
 		shopPanel.overlay.Visible = true
-	end)
+	end
+	shopButton.Activated:Connect(openShop)
 	pcall(Shop.refresh)
+
+	-- ===== Предложение стартового набора: одно всплывающее окно за сессию =====
+	local starterPanel = makePanel("StarterPanel")
+	starterPanel.title.Text = T("shop_starter_title")
+	local function openStarterPopup()
+		local left = starterSecondsLeft()
+		if left == nil or isRestricted() then
+			return
+		end
+		clearRows(starterPanel.list)
+		addShopRow(1, 0.55, T("shop_starter_title"), T("shop_starter_desc"), false, buyProduct(FishConfig.Shop.StarterPack.productId), {
+			banner = true,
+			icon = "ui_coin",
+			ribbonText = formatAge(left),
+			parent = starterPanel.list,
+		})
+		starterPanel.overlay.Visible = true
+	end
+
+	-- ===== Подсказки внизу экрана =====
+	local hintBar = make("TextButton", {
+		Name = "HintBar",
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.fromScale(0.02, 0.805),
+		Size = UDim2.fromScale(0.64, 0.055),
+		BackgroundColor3 = COLOR_BUTTON,
+		BorderSizePixel = 0,
+		TextScaled = true,
+		MinText = 9,
+		TextColor3 = WHITE,
+		Font = FONT,
+		Visible = false,
+		ZIndex = 3,
+	}, gui)
+	make("UICorner", { CornerRadius = UDim.new(0.25, 0) }, hintBar)
+	local hintToken = 0
+	local function showHint(text, seconds)
+		hintToken += 1
+		local token = hintToken
+		hintBar.Text = text
+		hintBar.Visible = true
+		task.delay(seconds or 7, function()
+			if hintToken == token then
+				hintBar.Visible = false
+			end
+		end)
+	end
+	hintBar.Activated:Connect(function()
+		hintBar.Visible = false
+		openShop()
+	end)
+
+	-- Монеты и доход в секунду (для подсказки «ещё ~N мин»)
+	local coinsValue = 0
+	coinsChangedEvent.OnClientEvent:Connect(function(value)
+		if typeof(value) == "number" then
+			coinsValue = value
+		end
+	end)
+	local function incomePerSecond()
+		local total = 0
+		for _, fish in pairs(fishById) do
+			local data = fish.data
+			local age = data.age + (os.clock() - fish.receivedAt)
+			local bonus = (setsState[data.tank] and setsState[data.tank].bonus) or 0
+			total += math.floor(FishConfig.incomeOf(data.species, data.variant, age) * (1 + bonus) + 0.5)
+		end
+		local multiplier = if owned("doubleCoins") then FishConfig.Shop.DoubleCoins.mult else 1
+		return total * multiplier / FishConfig.INCOME_INTERVAL
+	end
+
+	-- Не хватает монет на пак: говорим, сколько ждать, и предлагаем монеты за Robux (если магазин настроен)
+	Hints.noCoins = function()
+		local pack = FishConfig.Packs[FishConfig.Tanks[currentTank].pack]
+		local perSecond = incomePerSecond()
+		if coinsValue >= pack.price or perSecond <= 0 then
+			return false
+		end
+		local minutes = math.max(1, math.ceil((pack.price - coinsValue) / perSecond / 60))
+		showToast(T("toast_coins_eta", durationText(minutes * 60)))
+		if not isRestricted() and #activeProducts() > 0 then
+			showHint(T("hint_coins_shop"), 7)
+		end
+		return true
+	end
+
+	-- Офлайн-копилка заполнилась до предела: напоминаем про «Ночного смотрителя»
+	Hints.offline = function(_, capped)
+		if capped and not isRestricted() and configuredPass(FishConfig.Shop.NightWatch) and not owned("nightWatch") then
+			task.delay(1.5, function()
+				showHint(T("hint_offline_full"), 9)
+			end)
+		end
+	end
+
+	-- ===== Quick Open: кнопка «×N паков» (только с пассом) =====
+	local quickButton = make("TextButton", {
+		Name = "QuickOpenButton",
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.fromScale(0.98, 0.805),
+		Size = UDim2.fromScale(0.3, 0.055),
+		BackgroundColor3 = COLOR_GOLD,
+		BorderSizePixel = 0,
+		Text = T("quick_open", FishConfig.Shop.QuickOpen.packs),
+		TextScaled = true,
+		MinText = 9,
+		TextColor3 = Color3.fromRGB(60, 40, 0),
+		Font = FONT,
+		Visible = false,
+		ZIndex = 3,
+	}, gui)
+	make("UICorner", { CornerRadius = UDim.new(0.25, 0) }, quickButton)
+	quickButton.Activated:Connect(function()
+		if revealBusy then
+			return
+		end
+		openPackEvent:FireServer(FishConfig.Tanks[currentTank].pack, FishConfig.Shop.QuickOpen.packs) -- сервер сам проверит пасс
+	end)
 
 	if shopStateEvent ~= nil then
 		shopStateEvent.OnClientEvent:Connect(safely("ShopState", function(state)
 			if typeof(state) ~= "table" then
 				return
 			end
-			local owned = state.doubleCoins == true
 			local previous = Shop.state
-			Shop.state = { doubleCoins = owned, restricted = state.restricted ~= false }
-			doubleBadge.Visible = owned
-			if previous ~= nil and not previous.doubleCoins and owned then
-				Sfx.play("reward")
-				showToast(T("shop_unlocked"), COLOR_BUTTON, 3)
+			local nowOwned = {
+				doubleCoins = state.doubleCoins == true,
+				nightWatch = state.nightWatch == true,
+				secondHall = state.secondHall == true,
+				quickOpen = state.quickOpen == true,
+			}
+			Shop.state = {
+				owned = nowOwned,
+				restricted = state.restricted ~= false,
+				starterLeft = if typeof(state.starter) == "number" then state.starter else nil,
+				receivedAt = os.clock(),
+			}
+			doubleBadge.Visible = nowOwned.doubleCoins
+			quickButton.Visible = nowOwned.quickOpen and configuredPass(FishConfig.Shop.QuickOpen)
+
+			-- Только что купили пасс: радуемся
+			if previous ~= nil then
+				for key, has in pairs(nowOwned) do
+					if has and not previous.owned[key] then
+						Sfx.play("reward")
+						if key == "doubleCoins" then
+							showToast(T("shop_unlocked"), COLOR_BUTTON, 3)
+						else
+							for _, row in ipairs(PASS_ROWS) do
+								if row.key == key then
+									showToast(T(row.title) .. " ✓", COLOR_BUTTON, 3)
+								end
+							end
+						end
+					end
+				end
+			end
+
+			-- Стартовый набор показываем всплывающим окном не чаще раза за сессию и только если ничего другого не открыто
+			if Shop.state.starterLeft ~= nil and not Shop.state.restricted and not Shop.starterShown then
+				Shop.starterShown = true
+				task.delay(6, function()
+					for _, child in ipairs(gui:GetChildren()) do
+						if child:IsA("TextButton") and child.Name:match("Panel$") and child.Visible then
+							return
+						end
+					end
+					if not revealBusy then
+						openStarterPopup()
+					end
+				end)
 			end
 			Shop.refresh()
 		end))
