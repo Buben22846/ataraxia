@@ -3198,6 +3198,8 @@ do
 			end)
 		end
 
+		paintTabs()
+
 		lbState.OnClientEvent:Connect(function(message)
 			if typeof(message) ~= "table" or message.board ~= current then
 				return
