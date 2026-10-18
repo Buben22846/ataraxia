@@ -6,7 +6,7 @@ from pixel import Grid, save_sprite
 OUT = "#1d2b3a"
 LIGHT = "#ee6b45"
 BASE = "#b73a2a"
-SHADE = "#6a1c22"
+SHADE = "#8e2a26"
 FIN = "#c2412a"
 GLOW = "#ff9a3c"
 GLOW2 = "#ffd84a"

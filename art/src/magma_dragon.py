@@ -4,9 +4,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from pixel import Grid, save_sprite
 
 OUT = "#1d2b3a"
-LIGHT = "#8a7478"   # базальт, свет
-BASE = "#54444b"    # базальт, база
-SHADE = "#2f262c"   # базальт, тень
+LIGHT = "#a8908f"   # базальт, свет
+BASE = "#6e5c62"    # базальт, база
+SHADE = "#46393f"   # базальт, тень
 LAVA = "#ff7a1f"
 GLOW = "#ffd84a"
 HORN = "#ffe0a8"
@@ -24,10 +24,10 @@ def spline(ctrl, n=14):
     out.append(ctrl[-1])
     return out
 
-ctrl = [(4, 16), (6, 22), (13, 25), (19, 22), (21, 16), (23, 12)]
+ctrl = [(3, 15), (7, 19), (12, 21), (17, 19), (20, 16), (22, 15)]
 pts = spline(ctrl)
 M = len(pts)
-rad = [0.8 + 2.4 * min(i / (M * 0.6), 1.0) for i in range(M)]
+rad = [0.8 + 2.6 * min(i / (M * 0.55), 1.0) for i in range(M)]
 
 def normal(i):
     j0, j1 = max(i - 1, 0), min(i + 1, M - 1)
@@ -38,7 +38,7 @@ def normal(i):
 
 g = Grid()
 # светящийся гребень вдоль спины
-for i in range(10, M - 6, 5):
+for i in range(8, M - 4, 5):
     (dx, dy), (nx, ny) = normal(i)
     x, y = pts[i]; r = rad[i]
     b0 = (round(x + nx * (r - 0.5) - dx * 1.5), round(y + ny * (r - 0.5) - dy * 1.5))
@@ -55,10 +55,12 @@ g.poly([(tx, ty - 1), (tx, ty - 4), (tx + 1, ty - 1)], GLOW)
 for (x, y), r in zip(pts, rad):
     g.ellipse(round(x), round(y), r - 0.5, r - 0.5, BASE)
 # лапка-плавник
-g.poly([(18, 23), (16, 27), (21, 25)], LAVA)
-g.set(16, 27, GLOW)
+g.poly([(15, 22), (13, 26), (18, 23)], LAVA)
+g.set(13, 26, GLOW)
+g.poly([(9, 21), (7, 25), (11, 22)], LAVA)
+g.set(7, 25, GLOW)
 # голова
-hx, hy = 24, 9
+hx, hy = 24, 13
 g.ellipse(hx, hy, 5, 5, BASE)
 g.ellipse(hx + 4, hy + 3, 2, 2, BASE)             # морда
 # рожки
@@ -72,11 +74,11 @@ for y in range(g.h):
             if snap[y - 1][x] is None or snap[y - 1][x - 1] is None and snap[y][x - 1] == BASE and snap[y - 1][x] != BASE:
                 g.set(x, y, LIGHT)
             elif snap[y + 1][x] is None:
-                g.set(x, y, LAVA if (y > 17 and x < 22) else SHADE)
-            elif snap[y + 2][x] is None and y > 17 and x < 22:
+                g.set(x, y, LAVA if (x < 22) else SHADE)
+            elif snap[y + 2][x] is None and x < 22:
                 g.set(x, y, SHADE)
 # трещины
-for (x, y) in ((11, 22), (12, 23), (16, 20), (17, 19), (21, 15), (21, 14)):
+for (x, y) in ((8, 17), (9, 18), (13, 19), (14, 18), (18, 16), (19, 17)):
     if g.get(x, y) in (BASE, SHADE, LIGHT):
         g.set(x, y, LAVA)
 # лицо
