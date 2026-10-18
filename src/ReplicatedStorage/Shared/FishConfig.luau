@@ -62,8 +62,8 @@ FishConfig.SpeciesOrder = {
 FishConfig.Tanks = {
 	lagoon = { name = "Тихая лагуна", emoji = "🌊", price = 0, pack = "lagoon", slotPriceMult = 1, color = Color3.fromRGB(20, 110, 140), background = "bg_lagoon" },
 	volcano = { name = "Вулканический риф", emoji = "🌋", price = 5000, pack = "volcano", slotPriceMult = 4, color = Color3.fromRGB(105, 36, 28), background = "bg_volcano" },
-	arctic = { name = "Ледяной грот", emoji = "❄️", price = 150000, pack = "arctic", slotPriceMult = 10, color = Color3.fromRGB(64, 120, 165), background = "bg_arctic" },
-	abyss = { name = "Бездна", emoji = "🌌", price = 1500000, pack = "abyss", slotPriceMult = 25, color = Color3.fromRGB(12, 22, 52), background = "bg_abyss" },
+	arctic = { name = "Ледяной грот", emoji = "❄️", price = 4000000, pack = "arctic", slotPriceMult = 10, color = Color3.fromRGB(64, 120, 165), background = "bg_arctic" },
+	abyss = { name = "Бездна", emoji = "🌌", price = 100000000, pack = "abyss", slotPriceMult = 25, color = Color3.fromRGB(12, 22, 52), background = "bg_abyss" },
 }
 FishConfig.TankOrder = { "lagoon", "volcano", "arctic", "abyss" }
 
@@ -348,6 +348,19 @@ function FishConfig.rollMutation(rng)
 	end
 	return FishConfig.MutationOrder[1]
 end
+
+-- ===== Значки (Badges) =====
+-- id значков создаются в Creator Hub (Creations -> игра -> Badges). Пока id = 0, значок не выдаётся.
+--   golden — первая золотая рыба; rainbow — первая радужная; mutation — первая мутация;
+--   set — собран любой набор «все виды аквариума»; museum3 — ранг музея 3; abyss — открыта Бездна
+FishConfig.Badges = {
+	golden = 0,
+	rainbow = 0,
+	mutation = 0,
+	set = 0,
+	museum3 = 0,
+	abyss = 0,
+}
 
 FishConfig.Visitors = {
 	QUEUE_SIZE = 3,

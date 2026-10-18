@@ -18,6 +18,7 @@ local Shop = require(ServerScriptService:WaitForChild("Shop"))
 local Telemetry = require(ServerScriptService:WaitForChild("Telemetry"))
 local Collection = require(ServerScriptService:WaitForChild("Collection"))
 local Merge = require(ServerScriptService:WaitForChild("Merge"))
+local Badges = require(ServerScriptService:WaitForChild("Badges"))
 local Currents = require(ServerScriptService:WaitForChild("Currents"))
 local Visitors = require(ServerScriptService:WaitForChild("Visitors"))
 
@@ -236,6 +237,29 @@ local function sendCurrent(player, profile, event)
 	currentStateEvent:FireClient(player, summary)
 end
 
+-- Таблица игроков: сколько рыб и какой ранг музея (видно друзьям на том же сервере)
+local function updateLeaderstats(player, profile)
+	local stats = player:FindFirstChild("leaderstats")
+	if stats == nil then
+		stats = Instance.new("Folder")
+		stats.Name = "leaderstats"
+		for _, name in ipairs({ "Fish", "Museum" }) do
+			local value = Instance.new("IntValue")
+			value.Name = name
+			value.Parent = stats
+		end
+		stats.Parent = player
+	end
+	local fish = stats:FindFirstChild("Fish")
+	local museum = stats:FindFirstChild("Museum")
+	if fish then
+		fish.Value = Economy.fishCount(profile)
+	end
+	if museum then
+		museum.Value = Visitors.rank(if profile.visitors then profile.visitors.completed or 0 else 0)
+	end
+end
+
 local function sendFish(player, profile, event)
 	local now = os.time()
 	local list = {}
@@ -257,6 +281,8 @@ local function sendFish(player, profile, event)
 	fishChangedEvent:FireClient(player, list, tanksInfo)
 	sendVisitors(player, profile)
 	sendCurrent(player, profile, event)
+	updateLeaderstats(player, profile)
+	Badges.sync(player, profile)
 end
 
 -- Коллекция: найденные виды в порядке SpeciesOrder со статистикой (сколько раз выпала, сколько заработано)
@@ -338,6 +364,7 @@ local function onPlayerRemoving(player)
 	pendingOffline[player] = nil
 	funnelSent[player] = nil
 	passOwned[player] = nil
+	Badges.forget(player)
 	do
 		local leaving = PlayerData.get(player)
 		if leaving ~= nil then

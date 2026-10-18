@@ -115,6 +115,9 @@
       "Shop": {
         "$path": "src/ServerScriptService/Shop.luau"
       },
+      "Badges": {
+        "$path": "src/ServerScriptService/Badges.luau"
+      },
       "Currents": {
         "$path": "src/ServerScriptService/Currents.luau"
       },

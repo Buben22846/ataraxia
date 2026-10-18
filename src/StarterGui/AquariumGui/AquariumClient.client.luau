@@ -2069,6 +2069,46 @@ do
 		Sfx.setMusic(value)
 	end)
 
+	-- «Пригласить друга»: окно приглашения Roblox (если у игрока оно доступно)
+	do
+		local SocialService = game:GetService("SocialService")
+		local okInvite, canInvite = pcall(function()
+			return SocialService:CanSendGameInviteAsync(localPlayer)
+		end)
+		if okInvite and canInvite then
+			local inviteRow = make("Frame", {
+				Size = UDim2.fromScale(1, 0.45),
+				BackgroundColor3 = COLOR_ROW,
+				BorderSizePixel = 0,
+				LayoutOrder = 3,
+				ZIndex = 12,
+			}, settingsPanel.list)
+			make("UICorner", { CornerRadius = UDim.new(0.12, 0) }, inviteRow)
+			UIKit.frame(inviteRow, "ui_row")
+			local invite = make("TextButton", {
+				Name = "Invite",
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(0.5, 0.5),
+				Size = UDim2.fromScale(0.92, 0.64),
+				BackgroundColor3 = COLOR_BUTTON,
+				BorderSizePixel = 0,
+				Text = T("settings_invite"),
+				TextScaled = true,
+				MinText = 10,
+				MaxText = 22,
+				TextColor3 = WHITE,
+				Font = FONT,
+				ZIndex = 13,
+			}, inviteRow)
+			make("UICorner", { CornerRadius = UDim.new(0.25, 0) }, invite)
+			invite.Activated:Connect(function()
+				pcall(function()
+					SocialService:PromptGameInvite(localPlayer)
+				end)
+			end)
+		end
+	end
+
 	soundButton.Activated:Connect(function()
 		settingsPanel.overlay.Visible = true
 	end)

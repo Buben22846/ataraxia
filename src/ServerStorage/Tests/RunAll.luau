@@ -558,6 +558,27 @@ return function()
 	local mergedOk, mergedFish = Merge.perform(mergeProfile, 1, 100)
 	check("слияние: новая рыба наследует лучшую мутацию", mergedOk == true and mergedFish.mutation == "glow")
 
+	-- ===== Значки =====
+	local Badges = require(ServerScriptService.Badges)
+	local function hasKey(list, key)
+		for _, k in ipairs(list) do
+			if k == key then
+				return true
+			end
+		end
+		return false
+	end
+	local fresh = currentProfile(1)
+	check("значки: у нового игрока их нет", #Badges.earned(fresh) == 0)
+	local earnedP = currentProfile(1)
+	earnedP.seen = { ["guppy/golden"] = true, ["whale/rainbow"] = true }
+	earnedP.mutSeen = { glow = true }
+	earnedP.tanks.abyss = FishConfig.newTank()
+	earnedP.visitors = { tickets = 0, completed = FishConfig.Visitors.RankThresholds[3], nextId = 1, slots = {} }
+	local earnedList = Badges.earned(earnedP)
+	check("значки: золотая, радужная, мутация, музей 3 и бездна", hasKey(earnedList, "golden") and hasKey(earnedList, "rainbow") and hasKey(earnedList, "mutation") and hasKey(earnedList, "museum3") and hasKey(earnedList, "abyss"))
+	check("значки: без собранного набора значка «набор» нет", not hasKey(earnedList, "set"))
+
 	-- ===== Короткая запись чисел =====
 	local Strings = require(ReplicatedStorage.Shared.Strings)
 	check("число: до 1000 без сокращения", Strings.num(0) == "0" and Strings.num(7) == "7" and Strings.num(999) == "999")
