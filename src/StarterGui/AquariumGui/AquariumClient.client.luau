@@ -1321,40 +1321,41 @@ do
 	museumPanel.list.Size = UDim2.fromScale(0.9, 0.6)
 	ListKit.scroll(museumPanel) -- со вторым залом в очереди 6 гостей, список прокручивается
 
-	-- Строка: слева текст в две строки, справа кнопка (enabled — зелёная, иначе серая)
+	-- Строка: слева текст в две строки, справа кнопка (enabled — зелёная, иначе серая).
+	-- Строки не пересоздаются при каждом обновлении (раз в секунду), а меняют текст на месте:
+	-- иначе список дёргается при прокрутке. museumRows[order] = { frame, info, button, onClick }
+	local museumRows = {}
+	local usedRows = {}
 	local function addMuseumRow(order, leftText, leftColor, buttonText, enabled, onClick)
-		local row = make("Frame", {
-			Size = ListKit.rowSize(museumPanel.list, 0.3),
-			BackgroundColor3 = COLOR_ROW,
-			BorderSizePixel = 0,
-			LayoutOrder = order,
-			ZIndex = 12,
-		}, museumPanel.list)
-		make("UICorner", { CornerRadius = UDim.new(0.15, 0) }, row)
-		UIKit.frame(row, "ui_row")
-		make("TextLabel", {
-			Name = "Info",
-			Position = UDim2.fromScale(0.03, 0.08),
-			Size = UDim2.fromScale(if buttonText then 0.6 else 0.94, 0.84),
-			BackgroundTransparency = 1,
-			Text = leftText,
-			TextScaled = true,
-			TextWrapped = true,
-			MinText = 9,
-			MaxText = 18,
-			TextXAlignment = Enum.TextXAlignment.Left,
-			TextColor3 = leftColor,
-			Font = FONT,
-			ZIndex = 13,
-		}, row)
-		if buttonText then
+		usedRows[order] = true
+		local entry = museumRows[order]
+		if entry == nil then
+			local row = make("Frame", {
+				Size = ListKit.rowSize(museumPanel.list, 0.3),
+				BackgroundColor3 = COLOR_ROW,
+				BorderSizePixel = 0,
+				LayoutOrder = order,
+				ZIndex = 12,
+			}, museumPanel.list)
+			make("UICorner", { CornerRadius = UDim.new(0.15, 0) }, row)
+			UIKit.frame(row, "ui_row")
+			local info = make("TextLabel", {
+				Name = "Info",
+				Position = UDim2.fromScale(0.03, 0.08),
+				BackgroundTransparency = 1,
+				TextScaled = true,
+				TextWrapped = true,
+				MinText = 9,
+				MaxText = 18,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				Font = FONT,
+				ZIndex = 13,
+			}, row)
 			local button = make("TextButton", {
 				Name = "Action",
 				Position = UDim2.fromScale(0.66, 0.14),
 				Size = UDim2.fromScale(0.31, 0.72),
-				BackgroundColor3 = if enabled then COLOR_BUTTON else COLOR_MUTED,
 				BorderSizePixel = 0,
-				Text = buttonText,
 				TextScaled = true,
 				MinText = 10,
 				MaxText = 20,
@@ -1363,8 +1364,21 @@ do
 				ZIndex = 13,
 			}, row)
 			make("UICorner", { CornerRadius = UDim.new(0.25, 0) }, button)
-			button.Activated:Connect(onClick)
+			entry = { frame = row, info = info, button = button, onClick = nil }
+			button.Activated:Connect(function()
+				if entry.onClick then
+					entry.onClick()
+				end
+			end)
+			museumRows[order] = entry
 		end
+		entry.info.Text = leftText
+		entry.info.TextColor3 = leftColor
+		entry.info.Size = UDim2.fromScale(if buttonText then 0.6 else 0.94, 0.84)
+		entry.button.Visible = buttonText ~= nil
+		entry.button.Text = buttonText or ""
+		entry.button.BackgroundColor3 = if enabled then COLOR_BUTTON else COLOR_MUTED
+		entry.onClick = onClick
 	end
 
 	local function timeLeft(seconds)
@@ -1377,7 +1391,7 @@ do
 			return
 		end
 		museumPanel.title.Text = T("museum_title", state.rank, state.tickets)
-		clearRows(museumPanel.list)
+		table.clear(usedRows)
 		for index, order in ipairs(state.orders) do
 			if order.waiting then
 				addMuseumRow(index, T("order_waiting", timeLeft(order.left)), COLOR_MUTED)
@@ -1431,6 +1445,14 @@ do
 					actionEvent:FireServer("shop", "slot", currentTank)
 				end
 			end)
+		end
+
+		-- строки, которых больше нет (например, гостей стало меньше), убираем
+		for order, entry in pairs(museumRows) do
+			if not usedRows[order] then
+				entry.frame:Destroy()
+				museumRows[order] = nil
+			end
 		end
 	end
 
