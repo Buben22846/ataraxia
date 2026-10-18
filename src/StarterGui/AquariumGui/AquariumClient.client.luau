@@ -4190,7 +4190,7 @@ do
 				Position = UDim2.fromScale(x, 0.82),
 				Size = UDim2.fromScale(0.11, 0.11),
 				BackgroundColor3 = GOLD,
-				BackgroundTransparency = 0.35,
+				BackgroundTransparency = 0.2,
 				BorderSizePixel = 0,
 				AutoButtonColor = false,
 				Text = "✨",
@@ -4266,7 +4266,7 @@ do
 				spawnGold(message.id, math.clamp(tonumber(message.life) or 15, 5, 30))
 			elseif message.coins ~= nil then
 				Sfx.play("reward")
-				task.spawn(floatText, "+" .. Strings.num(message.coins) .. " 🪙")
+				task.spawn(floatText, "+" .. Strings.num(message.coins))
 			end
 		end)
 	end
