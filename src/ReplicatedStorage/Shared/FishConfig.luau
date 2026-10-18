@@ -525,43 +525,53 @@ FishConfig.Bubbles = {
 -- x — центр по ширине экрана, y — линия дна (низ предмета), доли экрана.
 -- anim: "sway" — покачивается (растения), "glow" — мерцает, "vent" — пускает пузырьки.
 -- tap: "open" — открывается (sprite открытый в open), "wobble" — подпрыгивает. flip — зеркально.
+-- Дно: полоса из картинки, повторяется по ширине; ниже неё — сплошной цвет (под кнопками).
+FishConfig.DecorFloor = {
+	TOP = 0.795, -- верх полосы дна, доля экрана
+	SCALE = 1.2, -- предметы чуть крупнее пикселя фона, чтобы читались на телефоне
+	lagoon = { id = "decor_floor_lagoon", color = Color3.fromRGB(201, 173, 110) },
+	volcano = { id = "decor_floor_volcano", color = Color3.fromRGB(42, 34, 38) },
+	arctic = { id = "decor_floor_arctic", color = Color3.fromRGB(196, 220, 234) },
+	abyss = { id = "decor_floor_abyss", color = Color3.fromRGB(21, 26, 54) },
+	haunted = { id = "decor_floor_haunted", color = Color3.fromRGB(42, 32, 48) },
+}
 FishConfig.Decor = {
 	lagoon = {
-		{ id = "decor_kelp", x = 0.05, y = 0.81, anim = "sway" },
-		{ id = "decor_coral", x = 0.19, y = 0.80, anim = "sway" },
-		{ id = "decor_chest", x = 0.34, y = 0.805, tap = "open", open = "decor_chest_open" },
-		{ id = "decor_shell", x = 0.5, y = 0.80, tap = "open", open = "decor_shell_open" },
-		{ id = "decor_anemone", x = 0.63, y = 0.80, anim = "sway" },
-		{ id = "decor_starfish", x = 0.73, y = 0.805, tap = "wobble" },
-		{ id = "decor_shroomhouse", x = 0.86, y = 0.81, tap = "wobble" },
-		{ id = "decor_kelp", x = 0.97, y = 0.81, anim = "sway", flip = true },
+		{ id = "decor_kelp", x = 0.05, y = 0.822, anim = "sway" },
+		{ id = "decor_coral", x = 0.19, y = 0.812, anim = "sway" },
+		{ id = "decor_chest", x = 0.34, y = 0.817, tap = "open", open = "decor_chest_open" },
+		{ id = "decor_shell", x = 0.5, y = 0.812, tap = "open", open = "decor_shell_open" },
+		{ id = "decor_anemone", x = 0.63, y = 0.812, anim = "sway" },
+		{ id = "decor_starfish", x = 0.42, y = 0.817, tap = "wobble" },
+		{ id = "decor_shroomhouse", x = 0.86, y = 0.822, tap = "wobble" },
+		{ id = "decor_kelp", x = 0.97, y = 0.822, anim = "sway", flip = true },
 	},
 	volcano = {
-		{ id = "decor_vent", x = 0.1, y = 0.81, anim = "vent", tap = "wobble" },
-		{ id = "decor_firecoral", x = 0.27, y = 0.80, anim = "sway" },
-		{ id = "decor_obsidian", x = 0.5, y = 0.805 },
-		{ id = "decor_amphora", x = 0.72, y = 0.80, tap = "wobble" },
-		{ id = "decor_firecoral", x = 0.9, y = 0.81, anim = "sway", flip = true },
+		{ id = "decor_vent", x = 0.1, y = 0.822, anim = "vent", tap = "wobble" },
+		{ id = "decor_firecoral", x = 0.27, y = 0.812, anim = "sway" },
+		{ id = "decor_obsidian", x = 0.5, y = 0.817 },
+		{ id = "decor_amphora", x = 0.72, y = 0.812, tap = "wobble" },
+		{ id = "decor_firecoral", x = 0.9, y = 0.822, anim = "sway", flip = true },
 	},
 	arctic = {
-		{ id = "decor_seagrass", x = 0.05, y = 0.81, anim = "sway" },
-		{ id = "decor_igloo", x = 0.24, y = 0.805, tap = "wobble" },
-		{ id = "decor_icecrystal", x = 0.52, y = 0.80, anim = "glow" },
-		{ id = "decor_anchor", x = 0.76, y = 0.805, tap = "wobble" },
-		{ id = "decor_seagrass", x = 0.95, y = 0.81, anim = "sway", flip = true },
+		{ id = "decor_seagrass", x = 0.05, y = 0.822, anim = "sway" },
+		{ id = "decor_igloo", x = 0.24, y = 0.817, tap = "wobble" },
+		{ id = "decor_icecrystal", x = 0.52, y = 0.812, anim = "glow" },
+		{ id = "decor_anchor", x = 0.76, y = 0.817, tap = "wobble" },
+		{ id = "decor_seagrass", x = 0.95, y = 0.822, anim = "sway", flip = true },
 	},
 	abyss = {
-		{ id = "decor_tubeworm", x = 0.07, y = 0.81, anim = "sway" },
-		{ id = "decor_arch", x = 0.3, y = 0.81, anim = "glow" },
-		{ id = "decor_glowshroom", x = 0.58, y = 0.80, anim = "glow", tap = "wobble" },
-		{ id = "decor_wreck", x = 0.85, y = 0.81, tap = "wobble" },
+		{ id = "decor_tubeworm", x = 0.07, y = 0.822, anim = "sway" },
+		{ id = "decor_arch", x = 0.3, y = 0.822, anim = "glow" },
+		{ id = "decor_glowshroom", x = 0.58, y = 0.812, anim = "glow", tap = "wobble" },
+		{ id = "decor_wreck", x = 0.85, y = 0.822, tap = "wobble" },
 	},
 	haunted = {
-		{ id = "decor_deadtree", x = 0.09, y = 0.81 },
-		{ id = "decor_tombstone", x = 0.3, y = 0.80, tap = "wobble" },
-		{ id = "decor_lantern", x = 0.52, y = 0.80, anim = "glow", tap = "wobble" },
-		{ id = "decor_barrel", x = 0.74, y = 0.805, tap = "wobble" },
-		{ id = "decor_tombstone", x = 0.92, y = 0.81, flip = true, tap = "wobble" },
+		{ id = "decor_deadtree", x = 0.09, y = 0.822 },
+		{ id = "decor_tombstone", x = 0.3, y = 0.812, tap = "wobble" },
+		{ id = "decor_lantern", x = 0.52, y = 0.812, anim = "glow", tap = "wobble" },
+		{ id = "decor_barrel", x = 0.74, y = 0.817, tap = "wobble" },
+		{ id = "decor_tombstone", x = 0.92, y = 0.822, flip = true, tap = "wobble" },
 	},
 }
 

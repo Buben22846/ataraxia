@@ -3955,10 +3955,45 @@ do
 			ZIndex = z,
 		}, parent)
 
+		-- полоса дна
+		local floorDef = FishConfig.DecorFloor and FishConfig.DecorFloor[tankId]
+		local floorImage, floorFill
+		if floorDef ~= nil and SpriteData[floorDef.id] ~= nil then
+			floorFill = make("Frame", {
+				Name = "FloorFill",
+				Position = UDim2.fromScale(0, FishConfig.DecorFloor.TOP + 0.05),
+				Size = UDim2.fromScale(1, 1),
+				BackgroundColor3 = floorDef.color,
+				BorderSizePixel = 0,
+				ZIndex = z,
+			}, layer)
+			floorImage = Instance.new("ImageLabel")
+			floorImage.Name = "Floor"
+			floorImage.BackgroundTransparency = 1
+			floorImage.ScaleType = Enum.ScaleType.Tile
+			floorImage.Position = UDim2.fromScale(0, FishConfig.DecorFloor.TOP)
+			floorImage.ZIndex = z
+			if Sprites.apply(floorImage, floorDef.id, false) then
+				floorImage.Parent = layer
+			else
+				floorImage:Destroy()
+				floorImage = nil
+				floorFill:Destroy()
+				floorFill = nil
+			end
+		end
+		local itemScale = (FishConfig.DecorFloor and FishConfig.DecorFloor.SCALE) or 1
+
 		local function resize()
 			local u = unit(parent)
+			if floorImage ~= nil then
+				local fw, fh = SpriteData[floorDef.id].w, SpriteData[floorDef.id].h
+				floorImage.Size = UDim2.new(1, 0, 0, fh * u)
+				floorImage.TileSize = UDim2.fromOffset(fw * u, fh * u)
+				floorFill.Position = UDim2.new(0, 0, FishConfig.DecorFloor.TOP, fh * u - 1)
+			end
 			for _, it in ipairs(items) do
-				it.holder.Size = UDim2.fromOffset(it.w * u, it.h * u * 2)
+				it.holder.Size = UDim2.fromOffset(it.w * u * itemScale, it.h * u * 2 * itemScale)
 			end
 		end
 
@@ -4012,7 +4047,7 @@ do
 							task.wait(2.5 + rng:NextNumber() * 3)
 							if alive and parent.Visible ~= false then
 								local u = unit(parent)
-								local topY = d.y - (data.h * u) / math.max(parent.AbsoluteSize.Y, 1)
+								local topY = d.y - (data.h * u * itemScale) / math.max(parent.AbsoluteSize.Y, 1)
 								puff(layer, d.x, topY, 3, nil, z)
 							end
 						end
@@ -4023,7 +4058,7 @@ do
 				if className == "ImageButton" then
 					image.Activated:Connect(function()
 						local u = unit(parent)
-						local topY = d.y - (data.h * u) / math.max(parent.AbsoluteSize.Y, 1)
+						local topY = d.y - (data.h * u * itemScale) / math.max(parent.AbsoluteSize.Y, 1)
 						if d.tap == "open" then
 							if it.opened then
 								return

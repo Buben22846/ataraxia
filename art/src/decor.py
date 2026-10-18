@@ -598,6 +598,56 @@ def sheet(names, color, filename, scale=6, pad=4):
     canvas.save(os.path.join(OUT_PREVIEW, filename))
 
 
+
+# ===================== ДНО (полоса, повторяется по ширине) =====================
+def floor_grid(top, mid, low, specks, seed, bumps=6):
+    import random
+    rnd = random.Random(seed)
+    W, H = 135, 24
+    g = Grid(W, H)
+    # линия поверхности: плавные холмики, бесшовно по краям
+    for x in range(W):
+        t = x / W * 2 * math.pi
+        y = round(5 + 2.2 * math.sin(t * 2 + seed) + 1.3 * math.sin(t * bumps + seed * 2))
+        for yy in range(y, H):
+            g.set(x, yy, mid if yy > y + 1 else top)
+    for x in range(W):
+        for yy in range(H - 8, H):
+            if g.get(x, yy) is not None and (x + yy) % 3 != 0:
+                g.set(x, yy, low)
+    for (color, n) in specks:
+        for _ in range(n):
+            x, y = rnd.randrange(W), rnd.randrange(9, H - 2)
+            if g.get(x, y) is not None:
+                g.set(x, y, color)
+    return g
+
+
+@item("decor_floor_lagoon")
+def floor_lagoon():
+    return floor_grid("#f3e2b0", "#e2c98c", "#c9ad6e", [("#fff4d6", 40), ("#b8995a", 40), ("#ff9ecb", 6)], 1)
+
+
+@item("decor_floor_volcano")
+def floor_volcano():
+    return floor_grid("#5a4a50", "#3a2f34", "#2a2226", [("#ff6a2a", 14), ("#1c1719", 50), ("#ffa23c", 5)], 2)
+
+
+@item("decor_floor_arctic")
+def floor_arctic():
+    return floor_grid("#ffffff", "#e3f1f8", "#c4dcea", [("#a8cde0", 40), ("#ffffff", 20)], 3)
+
+
+@item("decor_floor_abyss")
+def floor_abyss():
+    return floor_grid("#2c3360", "#1d2448", "#151a36", [("#3fe0d0", 8), ("#ff5ab4", 4), ("#10142a", 50)], 4)
+
+
+@item("decor_floor_haunted")
+def floor_haunted():
+    g = floor_grid("#4a6a3a", "#3a2c3e", "#2a2030", [("#5a4a5e", 40), ("#8a8fa3", 8)], 5)
+    return g
+
 if __name__ == "__main__":
     for name, fn in ITEMS.items():
         g = fn()
