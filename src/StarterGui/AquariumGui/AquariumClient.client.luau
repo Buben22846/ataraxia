@@ -798,17 +798,26 @@ oddsButton.Activated:Connect(function()
 	local pack = currentPack()
 	oddsPanel.title.Text = T("odds_title", Strings.pack(FishConfig.Tanks[currentTank].pack))
 	clearRows(oddsPanel.list)
+	-- Конкретные рыбы скрыты ("❓"): показываем шанс каждой редкости,
+	-- число видов в ней и долю одного вида. Сумма шансов редкостей = 100%.
 	local chances = speciesChances(pack)
-	for index, id in ipairs(FishConfig.speciesOfTank(pack.tank)) do
-		local species = FishConfig.Species[id]
-		local rarity = FishConfig.Rarities[species.rarity]
-		addRow(
-			oddsPanel.list,
-			index,
-			species.emoji .. " " .. Strings.species(id) .. " (" .. Strings.rarity(species.rarity) .. ")",
-			formatPercent(chances[id] or 0),
-			rarity.color
-		)
+	local index = 0
+	for _, rarityId in ipairs(FishConfig.RarityOrder) do
+		local pool = FishConfig.speciesOfRarity(rarityId, pack.tank)
+		if #pool > 0 then
+			local total = 0
+			for _, id in ipairs(pool) do
+				total += chances[id] or 0
+			end
+			index += 1
+			addRow(
+				oddsPanel.list,
+				index,
+				T("odds_row", Strings.rarity(rarityId), #pool, formatPercent(total / #pool)),
+				formatPercent(total),
+				FishConfig.Rarities[rarityId].color
+			)
+		end
 	end
 	oddsPanel.overlay.Visible = true
 end)

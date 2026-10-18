@@ -206,6 +206,7 @@ local TEXT = {
 		unknown_fish = "❓ ???",
 		variant_hint = "Вариант: %s",
 		odds_title = "Шансы: %s",
+		odds_row = "❓ %s — видов: %d (по %s каждый)",
 
 		-- Карточка открытия пака
 		new_in_collection = "НОВАЯ В КОЛЛЕКЦИИ!",
@@ -349,6 +350,7 @@ local TEXT = {
 		unknown_fish = "❓ ???",
 		variant_hint = "Variant: %s",
 		odds_title = "Odds: %s",
+		odds_row = "❓ %s — %d species (%s each)",
 
 		new_in_collection = "NEW IN COLLECTION!",
 		great = "Nice!",
