@@ -749,7 +749,6 @@ return function()
 		Social.ensure(prof, T0).likesWeek = 3
 		prof.seen = { ["guppy/normal"] = true, ["guppy/golden"] = true, ["clown/normal"] = true, ["puffer/normal"] = true }
 		check("лидеры: очки по таблицам", Leaderboards.score(prof, "museum", T0) == 2 and Leaderboards.score(prof, "likes", T0) == 3 and Leaderboards.score(prof, "collection", T0) == 4)
-		check("лидеры: недельные очки сбрасываются", Leaderboards.score(prof, "museum", T0 + 8 * 86400) == 0)
 		check("лидеры: недельное хранилище по номеру недели", Leaderboards.storeName("likes", T0) ~= Leaderboards.storeName("likes", T0 + 7 * 86400) and Leaderboards.storeName("collection", T0) == "lb_collection")
 		Leaderboards.write(9001, prof, T0, true)
 		local other = M._newProfile()
@@ -762,6 +761,7 @@ return function()
 			writes += 1
 		end
 		check("лидеры: нулевые очки не пишутся", (stores[Leaderboards.storeName("museum", T0)] or { data = {} }).data["9001"] == 2 and (stores[Leaderboards.storeName("museum", T0)] or { data = {} }).data["9002"] == nil and writes == 3)
+		check("лидеры: недельные очки сбрасываются", Leaderboards.score(prof, "museum", T0 + 8 * 86400) == 0)
 		check("лидеры: неделя кончается в пределах 7 дней", Leaderboards.weekLeft(T0) > 0 and Leaderboards.weekLeft(T0) <= 7 * 86400)
 		Leaderboards.forget(9001)
 		Leaderboards.forget(9002)
