@@ -79,7 +79,7 @@ end
 -- Всё для клиента: { [tankId] = { bonus = число, tiers = { {id, have, need, done, bonus}, ... } } }
 function Collection.summary(profile)
 	local result = {}
-	for _, tankId in ipairs(FishConfig.TankOrder) do
+	for _, tankId in ipairs(FishConfig.allTanks()) do
 		local tiers = Collection.tankProgress(profile, tankId)
 		local bonus = 0
 		for _, tier in ipairs(tiers) do

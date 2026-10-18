@@ -579,6 +579,41 @@ return function()
 	check("значки: золотая, радужная, мутация, музей 3 и бездна", hasKey(earnedList, "golden") and hasKey(earnedList, "rainbow") and hasKey(earnedList, "mutation") and hasKey(earnedList, "museum3") and hasKey(earnedList, "abyss"))
 	check("значки: без собранного набора значка «набор» нет", not hasKey(earnedList, "set"))
 
+	-- ===== Ивенты =====
+	local Events = require(ServerScriptService.Events)
+	local HW = FishConfig.Events.halloween
+	local during = HW.startsAt + 3600
+	local after = HW.endsAt + 10
+	check("ивент: активен только в своё время", Events.active(during) == "halloween" and Events.active(after) == nil and Events.active(HW.startsAt - 1) == nil)
+	local ep = currentProfile(0)
+	check("ивент: до начала аквариум не выдаётся", Events.join(ep, HW.startsAt - 1) == nil and ep.tanks.haunted == nil)
+	Events.join(ep, during)
+	check("ивент: при входе выдан аквариум и подарок", ep.tanks.haunted ~= nil and Events.data(ep, "halloween").candy == HW.welcome)
+	Events.join(ep, during + 100)
+	check("ивент: подарок выдаётся один раз", Events.data(ep, "halloween").candy == HW.welcome)
+	check("ивент: онлайн даёт конфету раз в onlineEvery секунд", Events.onlineTick(ep, HW.onlineEvery - 5, during) == 0 and Events.onlineTick(ep, 5, during) == 1)
+	check("ивент: гость музея даёт половину билетов (не меньше 1)", Events.museumReward(9, during) == 4 and Events.museumReward(1, during) == 1 and Events.museumReward(9, after) == 0)
+	check("ивент: после конца конфеты не начисляются", Events.add(ep, 5, after) == 0)
+	local hauntedPack = FishConfig.Packs.haunted
+	check("ивент: пак покупается за конфеты, пока ивент идёт", (Events.canBuy(ep, hauntedPack, during)) == true)
+	check("ивент: после конца пак не продаётся", select(2, Events.canBuy(ep, hauntedPack, after)) == "over")
+	Events.data(ep, "halloween").candy = 3
+	check("ивент: мало конфет — отказ", select(2, Events.canBuy(ep, hauntedPack, during)) == "candy" and Events.spend(ep, 10, during) == false)
+	check("ивент: из Тыквенного пака только рыбы пруда", (function()
+		for _ = 1, 200 do
+			local id = PackRoller.roll(hauntedPack)
+			if FishConfig.Species[id].tank ~= "haunted" then
+				return false
+			end
+		end
+		return true
+	end)())
+	check("ивент: сводка для клиента есть только во время ивента", Events.summary(ep, during).tank == "haunted" and Events.summary(ep, after) == nil)
+	check("ивент: аквариум ивента в списке всех аквариумов, но не в цепочке покупки", table.find(FishConfig.allTanks(), "haunted") ~= nil and table.find(FishConfig.TankOrder, "haunted") == nil)
+	local hwBadge = currentProfile(0)
+	hwBadge.discovered = { bat_ray = true }
+	check("значок «Хэллоуин» за рыбу пруда", hasKey(Badges.earned(hwBadge), "halloween"))
+
 	-- ===== Короткая запись чисел =====
 	local Strings = require(ReplicatedStorage.Shared.Strings)
 	check("число: до 1000 без сокращения", Strings.num(0) == "0" and Strings.num(7) == "7" and Strings.num(999) == "999")

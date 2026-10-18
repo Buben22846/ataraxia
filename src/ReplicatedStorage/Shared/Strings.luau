@@ -47,6 +47,11 @@ end
 
 -- ===== Английские названия из конфига =====
 local EN_SPECIES = {
+	pumpkin_fish = "Pumpkin Fish",
+	ghost_guppy = "Ghost Guppy",
+	bat_ray = "Bat Ray",
+	bone_fish = "Bone Fish",
+	jack_angler = "Jack Angler",
 	guppy = "Guppy",
 	clown = "Clownfish",
 	puffer = "Pufferfish",
@@ -69,6 +74,7 @@ local EN_SPECIES = {
 	leviathan = "Leviathan",
 }
 local EN_TANKS = {
+	haunted = "Haunted Pond",
 	lagoon = "Quiet Lagoon",
 	volcano = "Volcanic Reef",
 	arctic = "Frozen Grotto",
@@ -91,6 +97,7 @@ local EN_MUTATIONS = {
 	pearl = "Pearly",
 }
 local EN_PACKS = {
+	haunted = "Pumpkin Pack",
 	lagoon = "Lagoon Pack",
 	volcano = "Volcano Pack",
 	arctic = "Ice Pack",
@@ -130,6 +137,14 @@ function Strings.mutation(id)
 	return pick(EN_MUTATIONS, FishConfig.Mutations, id)
 end
 
+local EN_EVENTS = {
+	halloween = "Halloween",
+}
+
+function Strings.eventName(id)
+	return pick(EN_EVENTS, FishConfig.Events, id)
+end
+
 function Strings.pack(id)
 	return pick(EN_PACKS, FishConfig.Packs, id)
 end
@@ -167,6 +182,13 @@ local TEXT = {
 		-- Главный экран
 		coins = "%s",
 		buy_pack = "%s (%s)",
+		buy_pack_candy = "%s (🍬 %s)",
+		toast_candy = "Не хватает конфет 🍬: их дают гости музея, течения, награда за день и игра онлайн",
+		toast_event_over = "Ивент закончился: пак больше не продаётся, рыбы остаются у вас",
+		event_chip = "%s %s · %s %s · %s",
+		event_left_d = "%dд %dч",
+		event_left_h = "%dч %dм",
+		event_welcome = "%s %s! Открыт аквариум «%s», в подарок конфеты 🍬",
 		odds = "Шансы",
 		collection = "Коллекция %s/%s",
 		slots_max = "Мест: максимум",
@@ -305,6 +327,13 @@ local TEXT = {
 	en = {
 		coins = "%s",
 		buy_pack = "%s (%s)",
+		buy_pack_candy = "%s (🍬 %s)",
+		toast_candy = "Not enough candy 🍬: get it from museum guests, currents, the daily reward and playing online",
+		toast_event_over = "The event is over: the pack is no longer sold, your fish stay with you",
+		event_chip = "%s %s · %s %s · %s",
+		event_left_d = "%dd %dh",
+		event_left_h = "%dh %dm",
+		event_welcome = "%s %s! The %s tank is open, and here is some candy 🍬",
 		odds = "Odds",
 		collection = "Collection %s/%s",
 		slots_max = "Slots: max",

@@ -49,6 +49,13 @@ function Badges.earned(profile)
 	if profile.tanks.abyss ~= nil then
 		add("abyss")
 	end
+	for speciesId in pairs(profile.discovered or {}) do
+		local species = FishConfig.Species[speciesId]
+		if species ~= nil and species.tank == "haunted" then
+			add("halloween")
+			break
+		end
+	end
 	return list
 end
 

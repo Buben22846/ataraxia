@@ -86,6 +86,7 @@ local function newProfile()
 		starter = { offeredAt = 0, bought = false }, -- стартовый набор: когда предложили и куплен ли
 		nextCurrentAt = 0, -- когда начнётся следующее течение (os.time)
 		mutSeen = {}, -- { [мутация] = true }: какие мутации у игрока когда-либо были
+		events = {}, -- { [id ивента] = { candy, welcomed, online } }
 	}
 end
 

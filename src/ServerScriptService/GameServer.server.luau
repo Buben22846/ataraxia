@@ -18,6 +18,7 @@ local Shop = require(ServerScriptService:WaitForChild("Shop"))
 local Telemetry = require(ServerScriptService:WaitForChild("Telemetry"))
 local Collection = require(ServerScriptService:WaitForChild("Collection"))
 local Merge = require(ServerScriptService:WaitForChild("Merge"))
+local Events = require(ServerScriptService:WaitForChild("Events"))
 local Badges = require(ServerScriptService:WaitForChild("Badges"))
 local Currents = require(ServerScriptService:WaitForChild("Currents"))
 local Visitors = require(ServerScriptService:WaitForChild("Visitors"))
@@ -48,6 +49,7 @@ local tutorialDoneEvent = remotes:WaitForChild("TutorialDone")
 local shopStateEvent = remotes:WaitForChild("ShopState")
 local settingsEvent = remotes:WaitForChild("Settings")
 local currentStateEvent = remotes:WaitForChild("CurrentState")
+local eventStateEvent = remotes:WaitForChild("EventState")
 
 -- ===== Покупки за Robux =====
 -- Геймпасс «x2 монеты» проверяем у MarketplaceService при входе и после покупки; результат помним на сервере.
@@ -281,6 +283,7 @@ local function sendFish(player, profile, event)
 	fishChangedEvent:FireClient(player, list, tanksInfo)
 	sendVisitors(player, profile)
 	sendCurrent(player, profile, event)
+	eventStateEvent:FireClient(player, Events.summary(profile, os.time()))
 	updateLeaderstats(player, profile)
 	Badges.sync(player, profile)
 end
@@ -344,6 +347,7 @@ local function onPlayerAdded(player)
 	refreshPolicy(player)
 	profile.sessions = (profile.sessions or 0) + 1
 	Currents.reset(profile, now) -- течения идут только пока игрок в игре
+	Events.join(profile, now) -- во время ивента: аквариум ивента и приветственные конфеты
 	local gained, capped = Economy.applyOffline(profile, now, incomeMultiplier(player), offlineCap(player))
 	profile.lastSeen = now
 	if gained > 0 then
@@ -424,13 +428,21 @@ openPackEvent.OnServerEvent:Connect(function(player, packId, count)
 			failReason = "full"
 			break
 		end
-		if profile.coins < pack.price then
-			failReason = "coins"
-			break
+		if pack.currency == "candy" then
+			local canBuy, reason = Events.canBuy(profile, pack, os.time())
+			if not canBuy then
+				failReason = reason
+				break
+			end
+			Events.spend(profile, pack.price, os.time())
+		else
+			if profile.coins < pack.price then
+				failReason = "coins"
+				break
+			end
+			profile.coins -= pack.price
+			Telemetry.sink(player, pack.price, profile.coins, Telemetry.TxType.Shop, "pack_" .. packId)
 		end
-
-		profile.coins -= pack.price
-		Telemetry.sink(player, pack.price, profile.coins, Telemetry.TxType.Shop, "pack_" .. packId)
 
 		local speciesId, rarity = PackRoller.roll(pack)
 		local fishId = profile.nextFishId
@@ -513,6 +525,7 @@ visitorActionEvent.OnServerEvent:Connect(function(player, action, a, b)
 		local ok, info = Visitors.fulfill(profile, a, os.time(), queueSize(player))
 		if ok then
 			print(player.Name, "показал рыбу гостю: +" .. info.tickets, "билетов, ранг", info.rank)
+			Events.add(profile, Events.museumReward(info.tickets, os.time()), os.time())
 			sendVisitors(player, profile, { kind = "reward", tickets = info.tickets, rank = info.rank, rankUp = info.rankUp })
 		else
 			sendVisitors(player, profile, { kind = "fail", reason = info })
@@ -530,6 +543,10 @@ visitorActionEvent.OnServerEvent:Connect(function(player, action, a, b)
 	end
 
 	if a == "rarepack" then
+		if FishConfig.Tanks[b].event ~= nil then
+			packResultEvent:FireClient(player, { ok = false, reason = "over" }) -- рыбы ивента только из пака ивента
+			return
+		end
 		if #tankData.fish >= tankData.slots then
 			packResultEvent:FireClient(player, { ok = false, reason = "full" })
 			return
@@ -582,8 +599,15 @@ claimDailyEvent.OnServerEvent:Connect(function(player)
 		return
 	end
 	Telemetry.source(player, reward, profile.coins, Telemetry.TxType.TimedReward, "daily_reward")
+	do
+		local _, eventDef = Events.active(os.time())
+		if eventDef ~= nil then
+			Events.add(profile, eventDef.daily, os.time())
+		end
+	end
 	trackStep(player, 4)
 	sendCoins(player, profile)
+	sendFish(player, profile)
 	dailyStateEvent:FireClient(player, DailyReward.state(profile, os.time()))
 end)
 
@@ -659,8 +683,8 @@ buyTankEvent.OnServerEvent:Connect(function(player, tankId)
 		return
 	end
 	local def = FishConfig.Tanks[tankId]
-	if def == nil then
-		return
+	if def == nil or def.event ~= nil then
+		return -- ивентовые аквариумы не продаются
 	end
 	local profile = PlayerData.get(player)
 	if profile == nil or profile.tanks[tankId] ~= nil then
@@ -878,6 +902,13 @@ task.spawn(function()
 			local profile = PlayerData.get(player)
 			if profile ~= nil and Economy.fishCount(profile) > 0 then
 				local event = Currents.update(profile, os.time())
+				Events.onlineTick(profile, FishConfig.INCOME_INTERVAL, os.time())
+				if event ~= nil and event.kind == "ended" then
+					local _, eventDef = Events.active(os.time())
+					if eventDef ~= nil then
+						Events.add(profile, eventDef.current, os.time())
+					end
+				end
 				local earned = Economy.applyIncome(profile, 1, os.time(), incomeMultiplier(player))
 				Telemetry.addIncome(player, "fish_income", earned)
 				if ready[player] then

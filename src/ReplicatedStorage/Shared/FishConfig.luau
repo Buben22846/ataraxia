@@ -42,6 +42,12 @@ FishConfig.Species = {
 	jellyfish = { tank = "abyss", name = "Медуза", emoji = "🪼", rarity = "common", income = 700, sellPrice = 4200 },
 	anglerfish = { tank = "abyss", name = "Удильщик", emoji = "🎣", rarity = "rare", income = 1600, sellPrice = 9600 },
 	abyss_ray = { tank = "abyss", name = "Глубинный скат", emoji = "🪽", rarity = "epic", income = 4000, sellPrice = 24000 },
+	-- Призрачный пруд (ивент «Хэллоуин»): виды доступны только из Тыквенного пака во время ивента, но остаются навсегда
+	pumpkin_fish = { tank = "haunted", name = "Тыквенная рыбка", emoji = "🎃", rarity = "common", income = 15, sellPrice = 60 },
+	ghost_guppy = { tank = "haunted", name = "Призрачная гуппи", emoji = "👻", rarity = "common", income = 20, sellPrice = 80 },
+	bat_ray = { tank = "haunted", name = "Скат-нетопырь", emoji = "🦇", rarity = "rare", income = 50, sellPrice = 250 },
+	bone_fish = { tank = "haunted", name = "Рыба-скелет", emoji = "💀", rarity = "epic", income = 120, sellPrice = 700 },
+	jack_angler = { tank = "haunted", name = "Удильщик Джек", emoji = "🕯️", rarity = "legendary", income = 300, sellPrice = 1800 },
 	leviathan = { tank = "abyss", name = "Левиафан", emoji = "🐲", rarity = "legendary", income = 10000, sellPrice = 60000 },
 }
 
@@ -51,6 +57,7 @@ FishConfig.SpeciesOrder = {
 	"ember_shrimp", "magma_crab", "fire_eel", "caldera_squid", "magma_dragon",
 	"penguin", "seal", "polar_shark", "beluga", "narwhal",
 	"lantern_fish", "jellyfish", "anglerfish", "abyss_ray", "leviathan",
+	"pumpkin_fish", "ghost_guppy", "bat_ray", "bone_fish", "jack_angler",
 }
 
 -- Аквариумы. У каждого свои рыбы (Species.tank), свой пак и своя цена мест.
@@ -66,6 +73,49 @@ FishConfig.Tanks = {
 	abyss = { name = "Бездна", emoji = "🌌", price = 100000000, pack = "abyss", slotPriceMult = 25, color = Color3.fromRGB(12, 22, 52), background = "bg_abyss" },
 }
 FishConfig.TankOrder = { "lagoon", "volcano", "arctic", "abyss" }
+
+-- Ивентовые аквариумы: не покупаются за монеты и не входят в обычную цепочку TankOrder.
+-- Выдаются бесплатно, пока идёт их ивент (FishConfig.Events), и остаются у игрока навсегда.
+FishConfig.Tanks.haunted = {
+	name = "Призрачный пруд",
+	emoji = "🎃",
+	price = 0,
+	event = "halloween",
+	pack = "haunted",
+	slotPriceMult = 2,
+	color = Color3.fromRGB(42, 40, 83),
+	background = "bg_haunted",
+}
+FishConfig.EventTankOrder = { "haunted" }
+
+-- Все аквариумы: обычные по порядку, потом ивентовые
+function FishConfig.allTanks()
+	local list = table.clone(FishConfig.TankOrder)
+	for _, id in ipairs(FishConfig.EventTankOrder) do
+		table.insert(list, id)
+	end
+	return list
+end
+
+-- ===== Ивенты =====
+-- Время — секунды UTC (os.time). Пока ивент идёт, игрок получает его аквариум и валюту (конфеты),
+-- пак ивента продаётся только за неё. Источники валюты: подарок при первом входе (welcome), награда за день (daily),
+-- конец течения (current), гость музея (половина билетов, museumDiv), и игра онлайн (+1 каждые onlineEvery секунд).
+FishConfig.Events = {
+	halloween = {
+		name = "Хэллоуин",
+		emoji = "🎃",
+		currency = "🍬",
+		startsAt = 1792281600, -- 18.10.2026 00:00 UTC
+		endsAt = 1793664000, -- 03.11.2026 00:00 UTC
+		tank = "haunted",
+		welcome = 30,
+		daily = 10,
+		current = 5,
+		museumDiv = 2,
+		onlineEvery = 300,
+	},
+}
 
 -- Порядок редкостей от частой к редкой
 FishConfig.RarityOrder = { "common", "rare", "epic", "legendary" }
@@ -90,6 +140,13 @@ FishConfig.Packs = {
 		name = "Пак льда",
 		tank = "arctic",
 		price = 3000,
+		odds = { common = 70, rare = 22, epic = 7, legendary = 1 },
+	},
+	haunted = {
+		name = "Тыквенный пак",
+		tank = "haunted",
+		price = 10,
+		currency = "candy", -- покупается за конфеты ивента, не за монеты
 		odds = { common = 70, rare = 22, epic = 7, legendary = 1 },
 	},
 	abyss = {
@@ -360,6 +417,7 @@ FishConfig.Badges = {
 	set = 778650768347445,
 	museum3 = 85139715503978,
 	abyss = 0,
+	halloween = 0, -- «Хэллоуин 2026»: поймана любая рыба Призрачного пруда
 }
 
 FishConfig.Visitors = {

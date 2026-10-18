@@ -303,7 +303,6 @@ applyBackground(currentTank)
 local function currentPack()
 	return FishConfig.Packs[FishConfig.Tanks[currentTank].pack]
 end
-local totalSpecies = #FishConfig.SpeciesOrder
 local discovered = {} -- id вида -> true (собранные виды, присылает сервер)
 -- Подсказки (ожидание монет, полная офлайн-копилка): реальный код задаёт блок магазина ниже, пока это заглушки.
 -- noCoins() возвращает true, если сам показал подсказку и обычное сообщение не нужно.
@@ -392,7 +391,8 @@ UIKit.pulse(buyButton)
 
 local function refreshBuyButton()
 	local pack = currentPack()
-	buyButton.Text = T("buy_pack", Strings.pack(FishConfig.Tanks[currentTank].pack), pack.price)
+	local key = if pack.currency == "candy" then "buy_pack_candy" else "buy_pack"
+	buyButton.Text = T(key, Strings.pack(FishConfig.Tanks[currentTank].pack), pack.price)
 end
 refreshBuyButton()
 
@@ -694,6 +694,14 @@ end
 
 local function refreshCollection()
 	local count = discoveredCount()
+	-- виды ивентовых аквариумов считаем, только если такой аквариум у игрока есть
+	local totalSpecies = 0
+	for _, id in ipairs(FishConfig.SpeciesOrder) do
+		local tankId = FishConfig.Species[id].tank
+		if FishConfig.Tanks[tankId].event == nil or tankSlots[tankId] ~= nil then
+			totalSpecies += 1
+		end
+	end
 	collectionButton.Text = T("collection", count, totalSpecies)
 	local tankIds = FishConfig.speciesOfTank(currentTank)
 	local tankFound = 0
@@ -1013,6 +1021,10 @@ packResultEvent.OnClientEvent:Connect(function(result)
 		end
 	elseif result.reason == "merge" then
 		showToast(T("toast_merge_fail"))
+	elseif result.reason == "candy" then
+		showToast(T("toast_candy"), nil, 3)
+	elseif result.reason == "over" then
+		showToast(T("toast_event_over"), nil, 3)
 	end
 end)
 
@@ -1730,9 +1742,12 @@ end
 
 local function refreshTanksPanel()
 	clearRows(tanksPanel.list)
-	for index, id in ipairs(FishConfig.TankOrder) do
+	for index, id in ipairs(FishConfig.allTanks()) do
 		local def = FishConfig.Tanks[id]
 		local owned = tankSlots[id] ~= nil
+		if def.event ~= nil and not owned then
+			continue -- ивентовый аквариум виден, только если он у игрока есть
+		end
 		local status = if id == currentTank then T("tank_here") elseif owned then T("tank_open") else T("tank_buy", def.price)
 		local row = make("TextButton", {
 			Size = UDim2.fromScale(1, 0.15),
@@ -2727,6 +2742,86 @@ do
 						showToast(T("toast_mutation", fishName, def.emoji .. " " .. Strings.mutation(first.mutation)), COLOR_GOLD, 4)
 					end
 				end
+			end
+		end))
+	end
+end
+
+-- ===== Ивенты (Хэллоуин и т.п.) =====
+-- Сервер присылает { id, left = секунд до конца, candy, tank } или nil (ивента нет). Плашка сверху показывает
+-- конфеты и сколько осталось; нажатие переносит в аквариум ивента. Пока открыта карточка рыбы, плашка скрыта.
+do
+	local eventStateEvent = remotes:WaitForChild("EventState", 10)
+	local eventUi = { state = nil, receivedAt = 0, welcomed = false }
+	local chip = make("TextButton", {
+		Name = "EventChip",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.fromScale(0.5, TANK_ROW_Y + TOP_H + 0.01),
+		Size = UDim2.fromScale(0.72, 0.045),
+		BackgroundColor3 = Color3.fromRGB(232, 128, 30),
+		BorderSizePixel = 0,
+		TextScaled = true,
+		MinText = 8,
+		MaxText = 18,
+		TextColor3 = Color3.fromRGB(40, 20, 50),
+		Font = FONT,
+		Visible = false,
+		ZIndex = 3,
+	}, gui)
+	make("UICorner", { CornerRadius = UDim.new(0.3, 0) }, chip)
+
+	local function leftText(seconds)
+		seconds = math.max(0, math.floor(seconds))
+		if seconds >= 86400 then
+			return T("event_left_d", seconds // 86400, (seconds % 86400) // 3600)
+		end
+		return T("event_left_h", seconds // 3600, (seconds % 3600) // 60)
+	end
+	local function refresh()
+		local state = eventUi.state
+		if state == nil then
+			chip.Visible = false
+			return
+		end
+		local def = FishConfig.Events[state.id]
+		local left = state.left - (os.clock() - eventUi.receivedAt)
+		if def == nil or left <= 0 then
+			chip.Visible = false
+			return
+		end
+		chip.Text = T("event_chip", def.emoji, Strings.eventName(state.id), def.currency, state.candy, leftText(left))
+		chip.Visible = not infoCard.Visible
+	end
+	infoCard:GetPropertyChangedSignal("Visible"):Connect(refresh)
+	chip.Activated:Connect(function()
+		local state = eventUi.state
+		if state ~= nil and tankSlots[state.tank] ~= nil and currentTank ~= state.tank then
+			Sfx.click()
+			switchTank(state.tank)
+		end
+	end)
+	task.spawn(function()
+		while true do
+			task.wait(20)
+			pcall(refresh)
+		end
+	end)
+	if eventStateEvent ~= nil then
+		eventStateEvent.OnClientEvent:Connect(safely("EventState", function(state)
+			eventUi.state = if typeof(state) == "table" then state else nil
+			eventUi.receivedAt = os.clock()
+			refresh()
+			if eventUi.state ~= nil and not eventUi.welcomed then
+				eventUi.welcomed = true
+				local def = FishConfig.Events[eventUi.state.id]
+				if def then
+					task.delay(3, function()
+						showToast(T("event_welcome", def.emoji, Strings.eventName(eventUi.state.id), Strings.tank(def.tank)), Color3.fromRGB(232, 128, 30), 5)
+					end)
+				end
+			end
+			if currentTank == (eventUi.state and eventUi.state.tank) then
+				refreshBuyButton()
 			end
 		end))
 	end

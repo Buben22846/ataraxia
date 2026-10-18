@@ -19,8 +19,9 @@ SPRITES = [
     "ember_shrimp", "magma_crab", "fire_eel", "caldera_squid", "magma_dragon",
     "penguin", "seal", "polar_shark", "beluga", "narwhal",
     "lantern_fish", "jellyfish", "anglerfish", "abyss_ray", "leviathan",
+    "pumpkin_fish", "ghost_guppy", "bat_ray", "bone_fish", "jack_angler",  # ивент Хэллоуин
 ]
-BACKGROUNDS = ["bg_lagoon", "bg_volcano", "bg_arctic", "bg_abyss"]
+BACKGROUNDS = ["bg_lagoon", "bg_volcano", "bg_arctic", "bg_abyss", "bg_haunted"]
 UI = ["ui_banner", "ui_coin", "ui_ticket", "ui_ticket_down", "ui_panel", "ui_row", "ui_btn", "ui_btn_down", "ui_btn_gold", "ui_btn_gold_down", "ui_btn_dark", "ui_btn_dark_down", "ui_btn_off"]  # art/src/ui_kit.py
 
 
