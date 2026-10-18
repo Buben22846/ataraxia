@@ -100,6 +100,15 @@
         },
         "SocialState": {
           "$className": "RemoteEvent"
+        },
+        "TideState": {
+          "$className": "RemoteEvent"
+        },
+        "LeaderboardAction": {
+          "$className": "RemoteEvent"
+        },
+        "LeaderboardState": {
+          "$className": "RemoteEvent"
         }
       }
     },
@@ -126,6 +135,12 @@
       },
       "Events": {
         "$path": "src/ServerScriptService/Events.luau"
+      },
+      "Tide": {
+        "$path": "src/ServerScriptService/Tide.luau"
+      },
+      "Leaderboards": {
+        "$path": "src/ServerScriptService/Leaderboards.luau"
       },
       "Social": {
         "$path": "src/ServerScriptService/Social.luau"

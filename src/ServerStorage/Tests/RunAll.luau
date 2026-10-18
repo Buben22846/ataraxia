@@ -686,6 +686,88 @@ return function()
 		check("гости: старые записи о кормлении и лайках удаляются", next(guest.social.fedAt) == nil and next(guest.social.likedDay) == nil)
 	end
 
+	-- ===== Большой прилив (Tide) =====
+	do
+		local Tide = require(ServerScriptService.Tide)
+		local C = FishConfig.Tide
+		local base = 1_800_000_000 - (1_800_000_000 - C.OFFSET) % C.PERIOD -- начало периода
+		check("прилив: идёт в начале часа", Tide.multiplier(base + 5) == C.INCOME_MULT and (Tide.window(base + C.DURATION - 1)))
+		check("прилив: после DURATION доход обычный", Tide.multiplier(base + C.DURATION) == 1)
+		local st = Tide.newState()
+		check("прилив: вне прилива паки не считаются", Tide.onPacks(st, 1, 3, base + C.DURATION + 5, 1) == false and st.opened == 0)
+		local goal = Tide.goalFor(2)
+		check("прилив: цель растёт с числом игроков", goal == C.GOAL_BASE + 2 * C.GOAL_PER_PLAYER and Tide.goalFor(100) == C.GOAL_MAX)
+		local hit = false
+		for _ = 1, goal - 1 do
+			hit = hit or Tide.onPacks(st, 1, 1, base + 60, 2)
+		end
+		check("прилив: до цели награды нет", not hit and st.opened == goal - 1 and not st.done)
+		check("прилив: цель выполнена ровно один раз", Tide.onPacks(st, 2, 1, base + 61, 2) == true and Tide.onPacks(st, 2, 1, base + 62, 2) == false)
+		check("прилив: оба игрока участники", st.participants[1] and st.participants[2])
+		local sum = Tide.summary(st, 1, base + 70)
+		check("прилив: сводка для клиента", sum.active and sum.done and sum.joined and sum.goal == goal and sum.left == C.DURATION - 70)
+		Tide.sync(st, base + C.PERIOD + 1, 1)
+		check("прилив: новый час — новая цель", st.opened == 0 and not st.done and next(st.participants) == nil)
+		local prof = M._newProfile()
+		local r = Tide.reward(prof, 10)
+		check("прилив: награда — билеты и монеты за доход", r.tickets == C.REWARD_TICKETS and r.coins == 10 * C.REWARD_TICKS and prof.coins == 100 + r.coins)
+	end
+
+	-- ===== Таблицы лидеров =====
+	do
+		local Leaderboards = require(ServerScriptService.Leaderboards)
+		local Social = require(ServerScriptService.Social)
+		local T0 = 1_800_000_000
+		local stores = {}
+		local mockService = {}
+		function mockService:GetOrderedDataStore(name)
+			local store = stores[name]
+			if store == nil then
+				store = { data = {} }
+				function store:SetAsync(key, value)
+					self.data[key] = value
+				end
+				function store:GetSortedAsync(_ascending, size)
+					local items = {}
+					for key, value in pairs(self.data) do
+						table.insert(items, { key = key, value = value })
+					end
+					table.sort(items, function(a, b) return a.value > b.value end)
+					while #items > size do
+						table.remove(items)
+					end
+					return { GetCurrentPage = function() return items end }
+				end
+				stores[name] = store
+			end
+			return store
+		end
+		Leaderboards._setService(mockService)
+		local prof = M._newProfile()
+		Leaderboards.addOrder(prof, T0)
+		Leaderboards.addOrder(prof, T0)
+		Social.ensure(prof, T0).likesWeek = 3
+		prof.seen = { ["guppy/normal"] = true, ["guppy/golden"] = true, ["clown/normal"] = true, ["puffer/normal"] = true }
+		check("лидеры: очки по таблицам", Leaderboards.score(prof, "museum", T0) == 2 and Leaderboards.score(prof, "likes", T0) == 3 and Leaderboards.score(prof, "collection", T0) == 4)
+		check("лидеры: недельные очки сбрасываются", Leaderboards.score(prof, "museum", T0 + 8 * 86400) == 0)
+		check("лидеры: недельное хранилище по номеру недели", Leaderboards.storeName("likes", T0) ~= Leaderboards.storeName("likes", T0 + 7 * 86400) and Leaderboards.storeName("collection", T0) == "lb_collection")
+		Leaderboards.write(9001, prof, T0, true)
+		local other = M._newProfile()
+		Social.ensure(other, T0).likesWeek = 7
+		Leaderboards.write(9002, other, T0, true)
+		local top = Leaderboards.top("likes", T0)
+		check("лидеры: топ отсортирован по очкам", #top == 2 and top[1].userId == 9002 and top[1].score == 7 and top[2].score == 3)
+		local writes = 0
+		for _ in pairs(stores) do
+			writes += 1
+		end
+		check("лидеры: нулевые очки не пишутся", stores[Leaderboards.storeName("museum", T0)].data["9002"] == nil and writes == 3)
+		check("лидеры: неделя кончается в пределах 7 дней", Leaderboards.weekLeft(T0) > 0 and Leaderboards.weekLeft(T0) <= 7 * 86400)
+		Leaderboards.forget(9001)
+		Leaderboards.forget(9002)
+		Leaderboards._setService(nil)
+	end
+
 	-- ===== Конфиг =====
 	for packId, pack in pairs(FishConfig.Packs) do
 		local sum = 0

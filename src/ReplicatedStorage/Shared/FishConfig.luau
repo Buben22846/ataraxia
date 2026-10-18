@@ -477,4 +477,35 @@ FishConfig.Social = {
 	VIEW_FISH_MAX = 40, -- сколько рыб чужого аквариума присылаем за раз
 }
 
+-- ===== Большой прилив (общее событие всех серверов) =====
+-- Каждый час в одно и то же время (по UTC, одинаково на всех серверах) DURATION секунд доход всех игроков ×INCOME_MULT.
+-- Во время прилива у сервера общая цель: вместе открыть паков goal = GOAL_BASE + GOAL_PER_PLAYER × игроков (не больше GOAL_MAX).
+-- Каждый, кто открыл хотя бы один пак за прилив, при выполнении цели получает билеты и монеты (REWARD_TICKS тиков своего дохода).
+FishConfig.Tide = {
+	PERIOD = 60 * 60,
+	OFFSET = 0, -- сдвиг начала от ровного часа UTC, секунд
+	DURATION = 10 * 60,
+	INCOME_MULT = 1.5,
+	GOAL_BASE = 5,
+	GOAL_PER_PLAYER = 8,
+	GOAL_MAX = 80,
+	REWARD_TICKETS = 5,
+	REWARD_TICKS = 60, -- 60 тиков по 5 с = 5 минут дохода
+	SHOW_BEFORE = 10 * 60, -- за сколько до начала показывать плашку
+}
+
+-- ===== Таблицы лидеров (этап 21) =====
+-- Недельные (сброс в понедельник 00:00 UTC): лайки и заказы музея. Коллекция — за всё время (виды × цвета).
+FishConfig.Leaderboards = {
+	ORDER = { "likes", "museum", "collection" },
+	Boards = {
+		likes = { emoji = "❤", weekly = true },
+		museum = { emoji = "🏛", weekly = true },
+		collection = { emoji = "📖", weekly = false },
+	},
+	TOP = 50,
+	WRITE_EVERY = 120, -- как часто записываем очки игрока, секунд
+	READ_EVERY = 180, -- как часто сервер перечитывает топ
+}
+
 return FishConfig

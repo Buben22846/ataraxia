@@ -23,6 +23,8 @@ local Badges = require(ServerScriptService:WaitForChild("Badges"))
 local Currents = require(ServerScriptService:WaitForChild("Currents"))
 local Visitors = require(ServerScriptService:WaitForChild("Visitors"))
 local Social = require(ServerScriptService:WaitForChild("Social"))
+local Tide = require(ServerScriptService:WaitForChild("Tide"))
+local Leaderboards = require(ServerScriptService:WaitForChild("Leaderboards"))
 
 -- ===== НАСТРОЙКИ =====
 -- Аквариумы игрока лежат в профиле (profile.tanks[id] = { slots, fish }), максимум мест и цены — в FishConfig.
@@ -53,6 +55,13 @@ local currentStateEvent = remotes:WaitForChild("CurrentState")
 local eventStateEvent = remotes:WaitForChild("EventState")
 local socialActionEvent = remotes:WaitForChild("SocialAction")
 local socialStateEvent = remotes:WaitForChild("SocialState")
+local tideStateEvent = remotes:WaitForChild("TideState")
+local leaderboardActionEvent = remotes:WaitForChild("LeaderboardAction")
+local leaderboardStateEvent = remotes:WaitForChild("LeaderboardState")
+
+-- Общая цель сервера во время Большого прилива (живёт только в памяти сервера)
+local tideState = Tide.newState()
+local rewardTide -- объявлена ниже (раздаёт награды за общую цель прилива)
 
 -- ===== Покупки за Robux =====
 -- Геймпасс «x2 монеты» проверяем у MarketplaceService при входе и после покупки; результат помним на сервере.
@@ -327,6 +336,7 @@ local function pushState(player)
 	tutorialDoneEvent:FireClient(player, profile.tutorialDone)
 	sendShopState(player)
 	settingsEvent:FireClient(player, profile.settings)
+	tideStateEvent:FireClient(player, Tide.summary(tideState, player.UserId, os.time()))
 
 	local offline = pendingOffline[player]
 	if offline then
@@ -379,6 +389,13 @@ local function onPlayerRemoving(player)
 	do
 		local leaving = PlayerData.get(player)
 		if leaving ~= nil then
+			pcall(Leaderboards.write, player.UserId, leaving, os.time(), true)
+		end
+		Leaderboards.forget(player.UserId)
+	end
+	do
+		local leaving = PlayerData.get(player)
+		if leaving ~= nil then
 			Telemetry.flush(player, leaving.coins)
 		end
 		Telemetry.forget(player)
@@ -396,6 +413,27 @@ clientReadyEvent.OnServerEvent:Connect(function(player)
 		pushState(player)
 	end
 end)
+
+-- ===== Большой прилив: награда участникам, когда сервер выполнил общую цель =====
+rewardTide = function()
+	local now = os.time()
+	for _, other in ipairs(Players:GetPlayers()) do
+		local profile = PlayerData.get(other)
+		if profile ~= nil and ready[other] then
+			local summary = Tide.summary(tideState, other.UserId, now)
+			if tideState.participants[other.UserId] then
+				local reward = Tide.reward(profile, Economy.incomePerTick(profile, now) * incomeMultiplier(other))
+				Telemetry.source(other, reward.coins, profile.coins, Telemetry.TxType.Gameplay, "tide_goal")
+				sendCoins(other, profile)
+				sendVisitors(other, profile)
+				summary.notice = { kind = "reward", coins = reward.coins, tickets = reward.tickets }
+			else
+				summary.notice = { kind = "done" }
+			end
+			tideStateEvent:FireClient(other, summary)
+		end
+	end
+end
 
 -- ===== Открытие пака =====
 -- Клиент присылает только id пака. Цену, шансы и результат сервер берёт сам.
@@ -468,11 +506,17 @@ openPackEvent.OnServerEvent:Connect(function(player, packId, count)
 	end
 
 	if opened > 0 then
+		if Tide.onPacks(tideState, player.UserId, opened, os.time(), #Players:GetPlayers()) then
+			task.defer(rewardTide)
+		end
 		sendCoins(player, profile)
 		sendFish(player, profile)
 		sendCollection(player, profile)
 		sendSets(player, profile)
 		trackStep(player, 2)
+		if ready[player] then
+			tideStateEvent:FireClient(player, Tide.summary(tideState, player.UserId, os.time()))
+		end
 	elseif failReason ~= nil then
 		packResultEvent:FireClient(player, { ok = false, reason = failReason })
 	end
@@ -533,6 +577,7 @@ visitorActionEvent.OnServerEvent:Connect(function(player, action, a, b)
 		if ok then
 			print(player.Name, "показал рыбу гостю: +" .. info.tickets, "билетов, ранг", info.rank)
 			Events.add(profile, Events.museumReward(info.tickets, os.time()), os.time())
+			Leaderboards.addOrder(profile, os.time())
 			sendVisitors(player, profile, { kind = "reward", tickets = info.tickets, rank = info.rank, rankUp = info.rankUp })
 		else
 			sendVisitors(player, profile, { kind = "fail", reason = info })
@@ -913,6 +958,29 @@ socialActionEvent.OnServerEvent:Connect(function(player, action, ownerId, tankId
 	end
 end)
 
+-- ===== Таблицы лидеров =====
+-- Клиент просит таблицу по имени; топ читается из кеша (Leaderboards сам обновляет его не чаще READ_EVERY).
+leaderboardActionEvent.OnServerEvent:Connect(function(player, board)
+	if not allow(player, "Leaderboard", 1, 3) then
+		return
+	end
+	if typeof(board) ~= "string" or FishConfig.Leaderboards.Boards[board] == nil then
+		return
+	end
+	local profile = PlayerData.get(player)
+	if profile == nil then
+		return
+	end
+	local now = os.time()
+	local list = Leaderboards.top(board, now) -- может подождать ответа хранилища
+	leaderboardStateEvent:FireClient(player, {
+		board = board,
+		list = list,
+		me = Leaderboards.score(profile, board, now),
+		weekLeft = if FishConfig.Leaderboards.Boards[board].weekly then Leaderboards.weekLeft(now) else nil,
+	})
+end)
+
 -- ===== Обработка покупок за Robux =====
 MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passId, wasPurchased)
 	if not wasPurchased or passId == 0 then
@@ -994,12 +1062,17 @@ task.spawn(function()
 						Events.add(profile, eventDef.current, os.time())
 					end
 				end
-				local earned = Economy.applyIncome(profile, 1, os.time(), incomeMultiplier(player), Social.multiplier(profile, os.time()))
+				local now = os.time()
+				Tide.sync(tideState, now, #Players:GetPlayers())
+				local extra = Social.multiplier(profile, now) * Tide.multiplier(now) -- кормление гостями × Большой прилив
+				local earned = Economy.applyIncome(profile, 1, now, incomeMultiplier(player), extra)
+				task.spawn(Leaderboards.write, player.UserId, profile, now)
 				Telemetry.addIncome(player, "fish_income", earned)
 				if ready[player] then
 					sendCoins(player, profile)
 					sendFish(player, profile, event)
 					sendCollection(player, profile)
+					tideStateEvent:FireClient(player, Tide.summary(tideState, player.UserId, now))
 				end
 			end
 		end

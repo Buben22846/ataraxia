@@ -88,6 +88,7 @@ local function newProfile()
 		mutSeen = {}, -- { [мутация] = true }: какие мутации у игрока когда-либо были
 		events = {}, -- { [id ивента] = { candy, welcomed, online } }
 		social = {}, -- гости: лайки, бонус кормления, кого кормил и лайкал (см. Social)
+		weekly = { week = 0, orders = 0 }, -- заказы музея за неделю (таблица лидеров)
 	}
 end
 

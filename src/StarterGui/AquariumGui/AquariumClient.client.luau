@@ -308,6 +308,7 @@ local discovered = {} -- id вида -> true (собранные виды, пр�
 -- noCoins() возвращает true, если сам показал подсказку и обычное сообщение не нужно.
 local CurrentUi = { state = nil, receivedAt = 0 } -- течения и мутации от сервера (см. блок «Течения» ниже)
 local Hints = { noCoins = function() return false end, offline = function(gained, capped) end }
+local LeaderboardUi = { open = function() end } -- окно таблиц лидеров (настоящую функцию задаёт блок ниже)
 local setsState = {} -- наборы коллекции от сервера: { [tankId] = { bonus, tiers = { {have, need, done, bonus}, ... } } }
 local revealBusy = false -- идёт анимация открытия пака
 local pendingReveals = {} -- очередь результатов, если они пришли во время анимации
@@ -3014,6 +3015,218 @@ do
 	end
 end
 
+-- ===== Большой прилив (этап 20) =====
+-- Сервер присылает сводку { active, left, nextIn, mult, opened, goal, done, joined, notice }.
+-- Плашка видна во время прилива и за SHOW_BEFORE до него; нажатие показывает подсказку о цели.
+do
+	local tideEvent = remotes:WaitForChild("TideState", 10)
+	if tideEvent ~= nil then
+		local tideUi = { state = nil, receivedAt = 0 }
+		local chip = make("TextButton", {
+			Name = "TideChip",
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.fromScale(0.5, 0.685),
+			Size = UDim2.fromScale(0.8, 0.045),
+			BackgroundColor3 = Color3.fromRGB(41, 121, 255),
+			BorderSizePixel = 0,
+			TextScaled = true,
+			MinText = 8,
+			MaxText = 18,
+			TextColor3 = WHITE,
+			Font = FONT,
+			Visible = false,
+			ZIndex = 3,
+		}, gui)
+		make("UICorner", { CornerRadius = UDim.new(0.3, 0) }, chip)
+
+		local function clock(seconds)
+			seconds = math.max(0, math.floor(seconds))
+			return string.format("%d:%02d", seconds // 60, seconds % 60)
+		end
+		local function refresh()
+			local st = tideUi.state
+			if st == nil then
+				chip.Visible = false
+				return
+			end
+			local passed = os.clock() - tideUi.receivedAt
+			if st.active and st.left - passed > 0 then
+				local goalText = if st.done then T("tide_goal_done") else T("tide_goal", st.opened or 0, st.goal or 0)
+				chip.Text = T("tide_active", tostring(st.mult), clock(st.left - passed)) .. " · " .. goalText
+				chip.BackgroundColor3 = if st.done then COLOR_BUTTON else Color3.fromRGB(41, 121, 255)
+				chip.Visible = true
+			elseif not st.active and st.nextIn - passed > 0 and st.nextIn - passed <= FishConfig.Tide.SHOW_BEFORE then
+				chip.Text = T("tide_soon", clock(st.nextIn - passed))
+				chip.BackgroundColor3 = COLOR_PANEL
+				chip.Visible = true
+			else
+				chip.Visible = false
+			end
+		end
+		chip.Activated:Connect(function()
+			showToast(T("tide_help", tostring(FishConfig.Tide.INCOME_MULT)), COLOR_PANEL, 5)
+		end)
+
+		local wasActive = nil
+		tideEvent.OnClientEvent:Connect(function(st)
+			if typeof(st) ~= "table" then
+				return
+			end
+			tideUi.state = st
+			tideUi.receivedAt = os.clock()
+			if wasActive == false and st.active then
+				showToast(T("toast_tide_start", tostring(st.mult)), Color3.fromRGB(41, 121, 255), 5)
+			end
+			wasActive = st.active
+			local notice = st.notice
+			if notice ~= nil then
+				if notice.kind == "reward" then
+					Sfx.play("reward")
+					showToast(T("toast_tide_reward", notice.coins or 0, notice.tickets or 0), COLOR_BUTTON, 5)
+				elseif notice.kind == "done" then
+					showToast(T("toast_tide_done"), COLOR_PANEL, 4)
+				end
+			end
+			refresh()
+		end)
+		task.spawn(function()
+			while true do
+				task.wait(1)
+				refresh()
+			end
+		end)
+	end
+end
+
+-- ===== Таблицы лидеров (этап 21) =====
+-- Окно открывается из списка игроков (кнопка 🏆). Вкладки: лайки за неделю, заказы музея за неделю, коллекция.
+do
+	local lbAction = remotes:WaitForChild("LeaderboardAction", 10)
+	local lbState = remotes:WaitForChild("LeaderboardState", 10)
+	if lbAction ~= nil and lbState ~= nil then
+		local L = FishConfig.Leaderboards
+		local panel = makePanel("LeaderboardPanel")
+		panel.title.Text = T("lb_title")
+		panel.list.Position = UDim2.fromScale(0.05, 0.23)
+		panel.list.Size = UDim2.fromScale(0.9, 0.5)
+		ListKit.scroll(panel)
+		local hint = addHint(panel, "")
+		local current = L.ORDER[1]
+		local tabButtons = {}
+		local tabsRow = make("Frame", {
+			Position = UDim2.fromScale(0.05, 0.125),
+			Size = UDim2.fromScale(0.9, 0.08),
+			BackgroundTransparency = 1,
+			ZIndex = 12,
+		}, panel.card)
+		make("UIListLayout", {
+			FillDirection = Enum.FillDirection.Horizontal,
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			Padding = UDim.new(0.02, 0),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}, tabsRow)
+
+		-- строка таблицы: высота в пикселях (прокручиваемый список)
+		local function lbRow(order, leftText, rightText, color)
+			local row = make("Frame", {
+				Size = ListKit.rowSize(panel.list, 0.12),
+				BackgroundColor3 = COLOR_ROW,
+				BorderSizePixel = 0,
+				LayoutOrder = order,
+				ZIndex = 12,
+			}, panel.list)
+			make("UICorner", { CornerRadius = UDim.new(0.2, 0) }, row)
+			make("TextLabel", {
+				Position = UDim2.fromScale(0.03, 0.15),
+				Size = UDim2.fromScale(0.68, 0.7),
+				BackgroundTransparency = 1,
+				Text = leftText,
+				TextScaled = true,
+				MinText = 9,
+				MaxText = 20,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextColor3 = color,
+				Font = FONT,
+				ZIndex = 13,
+			}, row)
+			make("TextLabel", {
+				Position = UDim2.fromScale(0.72, 0.15),
+				Size = UDim2.fromScale(0.25, 0.7),
+				BackgroundTransparency = 1,
+				Text = rightText,
+				TextScaled = true,
+				MinText = 9,
+				MaxText = 20,
+				TextXAlignment = Enum.TextXAlignment.Right,
+				TextColor3 = color,
+				Font = FONT,
+				ZIndex = 13,
+			}, row)
+		end
+
+		local function paintTabs()
+			for board, button in pairs(tabButtons) do
+				button.BackgroundColor3 = if board == current then COLOR_GOLD else COLOR_PANEL
+				button.TextColor3 = if board == current then Color3.fromRGB(60, 40, 0) else WHITE
+			end
+		end
+		local function request(board)
+			current = board
+			paintTabs()
+			clearRows(panel.list)
+			hint.Text = T("lb_loading")
+			lbAction:FireServer(board)
+		end
+		for index, board in ipairs(L.ORDER) do
+			local button = make("TextButton", {
+				Size = UDim2.fromScale(0.32, 1),
+				BackgroundColor3 = COLOR_PANEL,
+				BorderSizePixel = 0,
+				Text = L.Boards[board].emoji .. " " .. T("lb_tab_" .. board),
+				TextScaled = true,
+				MinText = 8,
+				MaxText = 18,
+				TextColor3 = WHITE,
+				Font = FONT,
+				LayoutOrder = index,
+				ZIndex = 13,
+			}, tabsRow)
+			make("UICorner", { CornerRadius = UDim.new(0.25, 0) }, button)
+			tabButtons[board] = button
+			button.Activated:Connect(function()
+				request(board)
+			end)
+		end
+
+		lbState.OnClientEvent:Connect(function(message)
+			if typeof(message) ~= "table" or message.board ~= current then
+				return
+			end
+			clearRows(panel.list)
+			local myId = localPlayer.UserId
+			for index, row in ipairs(message.list or {}) do
+				local medal = if index == 1 then "🥇" elseif index == 2 then "🥈" elseif index == 3 then "🥉" else tostring(index) .. "."
+				local color = if row.userId == myId then COLOR_GOLD else WHITE
+				lbRow(index, medal .. " " .. tostring(row.name), Strings.num(row.score or 0), color)
+			end
+			if #(message.list or {}) == 0 then
+				lbRow(1, T("lb_empty"), "", COLOR_MUTED)
+			end
+			local text = T("lb_me", L.Boards[current].emoji, Strings.num(message.me or 0))
+			if message.weekLeft ~= nil then
+				local left = message.weekLeft
+				text ..= " · " .. T("lb_reset", left // 86400, (left % 86400) // 3600)
+			end
+			hint.Text = text
+		end)
+
+		LeaderboardUi.open = function()
+			panel.overlay.Visible = true
+			request(current)
+		end
+	end
+end
+
 -- ===== Гости в аквариуме (этап 19) =====
 -- Кнопка 👥 рядом с выбором аквариума: список игроков на сервере. Можно открыть чужой аквариум
 -- (его фон и рыбы плавают на весь экран), покормить рыб (раз в 10 минут на игрока) и поставить лайк (раз в сутки).
@@ -3105,6 +3318,10 @@ do
 			clearRows(playersPanel.list)
 			table.sort(players, function(a, b)
 				return (a.likes or 0) > (b.likes or 0)
+			end)
+			listRow(0, T("lb_row"), T("lb_row_sub"), T("lb_open"), function()
+				playersPanel.overlay.Visible = false
+				LeaderboardUi.open()
 			end)
 			for index, entry in ipairs(players) do
 				listRow(index, tostring(entry.name), T("guests_row", entry.likes or 0, entry.fish or 0), T("guests_visit"), function()
