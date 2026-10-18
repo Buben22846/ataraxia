@@ -237,12 +237,13 @@ function FishConfig.multiplierOf(variantId, age)
 end
 
 -- Доход рыбы за один тик
-function FishConfig.incomeOf(speciesId, variantId, age)
+-- mutationId (необязателен) — мутация рыбы, она добавляет свой множитель
+function FishConfig.incomeOf(speciesId, variantId, age, mutationId)
 	local species = FishConfig.Species[speciesId]
 	if species == nil then
 		return 0
 	end
-	return round(species.income * FishConfig.multiplierOf(variantId, age))
+	return round(species.income * FishConfig.multiplierOf(variantId, age) * FishConfig.mutationMult(mutationId))
 end
 
 -- Цена продажи рыбы
@@ -306,6 +307,48 @@ end
 --   RankThresholds — сколько выполненных заказов нужно для ранга 1, 2, 3 ... (ранг открывает редких рыб, стадии и цвета)
 --   RarityTickets  — базовая награда за вид данной редкости; её множат стадия, цвет и ранг
 --   Shop           — траты билетов: пак редких рыб и дополнительные места сверх MAX_SLOTS
+-- ===== Течения и мутации =====
+-- Раз в MIN_GAP..MAX_GAP секунд (пока игрок в игре) в одном из его аквариумов начинается течение:
+-- DURATION секунд доход рыб этого аквариума умножается на INCOME_MULT. Когда течение заканчивается,
+-- у MUTATED_FISH рыб этого аквариума (без мутации) появляется постоянная мутация с бонусом к доходу.
+FishConfig.Currents = {
+	MIN_GAP = 20 * 60,
+	MAX_GAP = 40 * 60,
+	DURATION = 5 * 60,
+	INCOME_MULT = 1.5,
+	MUTATED_FISH = 2,
+}
+FishConfig.MutationOrder = { "bubble", "glow", "pearl" }
+FishConfig.Mutations = {
+	bubble = { name = "Пузырьковая", emoji = "🫧", mult = 1.10, weight = 60 },
+	glow = { name = "Светящаяся", emoji = "💡", mult = 1.20, weight = 30 },
+	pearl = { name = "Жемчужная", emoji = "🦪", mult = 1.40, weight = 10 },
+}
+
+-- Множитель дохода от мутации (нет мутации или неизвестная — 1)
+function FishConfig.mutationMult(mutationId)
+	local mutation = FishConfig.Mutations[mutationId or ""]
+	return if mutation then mutation.mult else 1
+end
+
+-- Выбор мутации по весам. rng — необязательный Random (для тестов).
+function FishConfig.rollMutation(rng)
+	rng = rng or Random.new()
+	local total = 0
+	for _, id in ipairs(FishConfig.MutationOrder) do
+		total += FishConfig.Mutations[id].weight
+	end
+	local r = rng:NextNumber() * total
+	local acc = 0
+	for _, id in ipairs(FishConfig.MutationOrder) do
+		acc += FishConfig.Mutations[id].weight
+		if r < acc then
+			return id
+		end
+	end
+	return FishConfig.MutationOrder[1]
+end
+
 FishConfig.Visitors = {
 	QUEUE_SIZE = 3,
 	ORDER_TTL = 45 * 60,

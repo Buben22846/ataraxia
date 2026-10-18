@@ -88,6 +88,9 @@
         },
         "VisitorAction": {
           "$className": "RemoteEvent"
+        },
+        "CurrentState": {
+          "$className": "RemoteEvent"
         }
       }
     },
@@ -111,6 +114,9 @@
       },
       "Shop": {
         "$path": "src/ServerScriptService/Shop.luau"
+      },
+      "Currents": {
+        "$path": "src/ServerScriptService/Currents.luau"
       },
       "Collection": {
         "$path": "src/ServerScriptService/Collection.luau"

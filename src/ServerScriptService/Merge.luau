@@ -55,6 +55,13 @@ function Merge.perform(profile, fishId, now)
 	for index = 1, needOthers do
 		doomed[others[index]] = true
 	end
+	-- новая рыба наследует лучшую мутацию из слитых
+	local bestMutation = nil
+	for fish in pairs(doomed) do
+		if fish.mutation ~= nil and FishConfig.mutationMult(fish.mutation) > FishConfig.mutationMult(bestMutation) then
+			bestMutation = fish.mutation
+		end
+	end
 	for index = #tankData.fish, 1, -1 do
 		if doomed[tankData.fish[index]] then
 			table.remove(tankData.fish, index)
@@ -68,6 +75,7 @@ function Merge.perform(profile, fishId, now)
 		variant = nextVariant,
 		born = now,
 		earned = 0,
+		mutation = bestMutation,
 	}
 	profile.nextFishId += 1
 	table.insert(tankData.fish, newFish)

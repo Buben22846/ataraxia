@@ -18,6 +18,7 @@ local Shop = require(ServerScriptService:WaitForChild("Shop"))
 local Telemetry = require(ServerScriptService:WaitForChild("Telemetry"))
 local Collection = require(ServerScriptService:WaitForChild("Collection"))
 local Merge = require(ServerScriptService:WaitForChild("Merge"))
+local Currents = require(ServerScriptService:WaitForChild("Currents"))
 local Visitors = require(ServerScriptService:WaitForChild("Visitors"))
 
 -- ===== НАСТРОЙКИ =====
@@ -45,6 +46,7 @@ local dailyStateEvent = remotes:WaitForChild("DailyState")
 local tutorialDoneEvent = remotes:WaitForChild("TutorialDone")
 local shopStateEvent = remotes:WaitForChild("ShopState")
 local settingsEvent = remotes:WaitForChild("Settings")
+local currentStateEvent = remotes:WaitForChild("CurrentState")
 
 -- ===== Покупки за Robux =====
 -- Геймпасс «x2 монеты» проверяем у MarketplaceService при входе и после покупки; результат помним на сервере.
@@ -227,7 +229,14 @@ end
 
 -- Рыбы всех аквариумов со статистикой (id, аквариум, вид, вариант, возраст в секундах, заработок)
 -- и число мест в каждом открытом аквариуме: { [tankId] = slots }
-local function sendFish(player, profile)
+-- Течение и мутации: состояние для клиента; event — только что начавшееся/закончившееся течение (для уведомления)
+local function sendCurrent(player, profile, event)
+	local summary = Currents.summary(profile, os.time())
+	summary.event = event
+	currentStateEvent:FireClient(player, summary)
+end
+
+local function sendFish(player, profile, event)
 	local now = os.time()
 	local list = {}
 	local tanksInfo = {}
@@ -241,11 +250,13 @@ local function sendFish(player, profile)
 				variant = fish.variant or "normal",
 				age = math.max(0, now - fish.born),
 				earned = fish.earned,
+				mutation = fish.mutation,
 			})
 		end
 	end
 	fishChangedEvent:FireClient(player, list, tanksInfo)
 	sendVisitors(player, profile)
+	sendCurrent(player, profile, event)
 end
 
 -- Коллекция: найденные виды в порядке SpeciesOrder со статистикой (сколько раз выпала, сколько заработано)
@@ -306,6 +317,7 @@ local function onPlayerAdded(player)
 	refreshPasses(player)
 	refreshPolicy(player)
 	profile.sessions = (profile.sessions or 0) + 1
+	Currents.reset(profile, now) -- течения идут только пока игрок в игре
 	local gained, capped = Economy.applyOffline(profile, now, incomeMultiplier(player), offlineCap(player))
 	profile.lastSeen = now
 	if gained > 0 then
@@ -838,11 +850,12 @@ task.spawn(function()
 		for _, player in ipairs(Players:GetPlayers()) do
 			local profile = PlayerData.get(player)
 			if profile ~= nil and Economy.fishCount(profile) > 0 then
+				local event = Currents.update(profile, os.time())
 				local earned = Economy.applyIncome(profile, 1, os.time(), incomeMultiplier(player))
 				Telemetry.addIncome(player, "fish_income", earned)
 				if ready[player] then
 					sendCoins(player, profile)
-					sendFish(player, profile)
+					sendFish(player, profile, event)
 					sendCollection(player, profile)
 				end
 			end

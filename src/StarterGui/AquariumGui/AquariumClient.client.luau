@@ -307,6 +307,7 @@ local totalSpecies = #FishConfig.SpeciesOrder
 local discovered = {} -- id вида -> true (собранные виды, присылает сервер)
 -- Подсказки (ожидание монет, полная офлайн-копилка): реальный код задаёт блок магазина ниже, пока это заглушки.
 -- noCoins() возвращает true, если сам показал подсказку и обычное сообщение не нужно.
+local CurrentUi = { state = nil, receivedAt = 0 } -- течения и мутации от сервера (см. блок «Течения» ниже)
 local Hints = { noCoins = function() return false end, offline = function(gained, capped) end }
 local setsState = {} -- наборы коллекции от сервера: { [tankId] = { bonus, tiers = { {have, need, done, bonus}, ... } } }
 local revealBusy = false -- идёт анимация открытия пака
@@ -725,6 +726,21 @@ local function refreshCollection()
 			if bonusPercent > 0 then COLOR_GOLD else COLOR_MUTED
 		)
 	end
+
+	-- Мутации: какие уже находили и сколько рыб с каждой
+	local mutations = CurrentUi.state and CurrentUi.state.mutations
+	if mutations ~= nil then
+		addRow(collectionPanel.list, 100, T("mut_title"), "", COLOR_MUTED)
+		for index, id in ipairs(FishConfig.MutationOrder) do
+			local info = mutations[id]
+			local def = FishConfig.Mutations[id]
+			if info ~= nil and info.seen then
+				addRow(collectionPanel.list, 100 + index, T("mut_row", def.emoji, Strings.mutation(id), string.format("%g", def.mult)), T("mut_count", info.count), COLOR_GOLD)
+			else
+				addRow(collectionPanel.list, 100 + index, T("unknown_fish"), "—", COLOR_MUTED)
+			end
+		end
+	end
 end
 
 collectionButton.Activated:Connect(function()
@@ -1101,10 +1117,13 @@ local function updateInfo()
 	local stage = FishConfig.stageFor(age)
 	local variant = FishConfig.variantOf(data.variant)
 	local special = data.variant ~= nil and data.variant ~= "normal"
-	local income = FishConfig.incomeOf(data.species, data.variant, age)
+	local income = FishConfig.incomeOf(data.species, data.variant, age, data.mutation)
 	local sellPrice = FishConfig.sellPriceOf(data.species, data.variant, age)
 	local speciesName = Strings.species(data.species)
 	local prefix = if special then variant.emoji .. " " .. Strings.variant(data.variant) .. " " else ""
+	if FishConfig.Mutations[data.mutation or ""] then
+		prefix = FishConfig.Mutations[data.mutation].emoji .. " " .. Strings.mutation(data.mutation) .. " " .. prefix
+	end
 	infoTitle.Text = prefix .. species.emoji .. " " .. speciesName .. " · " .. Strings.rarity(species.rarity)
 	infoTitle.TextColor3 = rarity.color
 	infoIncome.Text = T("info_income", income, T("age_s", FishConfig.INCOME_INTERVAL), sellPrice)
@@ -2446,7 +2465,12 @@ do
 			local data = fish.data
 			local age = data.age + (os.clock() - fish.receivedAt)
 			local bonus = (setsState[data.tank] and setsState[data.tank].bonus) or 0
-			total += math.floor(FishConfig.incomeOf(data.species, data.variant, age) * (1 + bonus) + 0.5)
+			local flow = 1
+			local cur = CurrentUi.state and CurrentUi.state.current
+			if cur ~= nil and cur.tank == data.tank and cur.left - (os.clock() - CurrentUi.receivedAt) > 0 then
+				flow = FishConfig.Currents.INCOME_MULT
+			end
+			total += math.floor(FishConfig.incomeOf(data.species, data.variant, age, data.mutation) * (1 + bonus) * flow + 0.5)
 		end
 		local multiplier = if owned("doubleCoins") then FishConfig.Shop.DoubleCoins.mult else 1
 		return total * multiplier / FishConfig.INCOME_INTERVAL
@@ -2554,6 +2578,83 @@ do
 				end)
 			end
 			Shop.refresh()
+		end))
+	end
+end
+
+-- ===== Течения =====
+-- Сервер раз в 20–40 минут запускает течение в одном аквариуме (доход ×1.5 на 5 минут), после него у пары рыб
+-- появляется мутация. Клиент только показывает: плашку с таймером, уведомления и список мутаций в коллекции.
+do
+	local currentStateEvent = remotes:WaitForChild("CurrentState", 10)
+	local chip = make("TextLabel", {
+		Name = "CurrentChip",
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.fromScale(0.5, 0.745),
+		Size = UDim2.fromScale(0.7, 0.05),
+		BackgroundColor3 = Color3.fromRGB(0, 120, 150),
+		BackgroundTransparency = 0.15,
+		BorderSizePixel = 0,
+		TextScaled = true,
+		MinText = 8,
+		MaxText = 18,
+		TextColor3 = WHITE,
+		Font = FONT,
+		Visible = false,
+		ZIndex = 3,
+	}, gui)
+	make("UICorner", { CornerRadius = UDim.new(0.3, 0) }, chip)
+
+	local function leftSeconds()
+		local cur = CurrentUi.state and CurrentUi.state.current
+		if cur == nil then
+			return nil
+		end
+		local left = cur.left - (os.clock() - CurrentUi.receivedAt)
+		return if left > 0 then left else nil
+	end
+	local function refreshChip()
+		local left = leftSeconds()
+		if left == nil then
+			chip.Visible = false
+			return
+		end
+		local total = math.ceil(left)
+		chip.Text = T("current_chip", Strings.tank(CurrentUi.state.current.tank), string.format("%g", FishConfig.Currents.INCOME_MULT), string.format("%d:%02d", total // 60, total % 60))
+		chip.Visible = true
+	end
+	task.spawn(function()
+		while true do
+			task.wait(1)
+			pcall(refreshChip)
+		end
+	end)
+
+	if currentStateEvent ~= nil then
+		currentStateEvent.OnClientEvent:Connect(safely("CurrentState", function(state)
+			if typeof(state) ~= "table" then
+				return
+			end
+			CurrentUi.state = state
+			CurrentUi.receivedAt = os.clock()
+			refreshChip()
+			refreshCollection()
+			local event = state.event
+			if typeof(event) == "table" then
+				if event.kind == "started" then
+					Sfx.play("reward")
+					showToast(T("toast_current_start", Strings.tank(event.tank), string.format("%g", FishConfig.Currents.INCOME_MULT), formatAge(FishConfig.Currents.DURATION)), Color3.fromRGB(0, 120, 150), 4)
+				elseif event.kind == "ended" and typeof(event.mutated) == "table" and #event.mutated > 0 then
+					Sfx.play("reveal")
+					local first = event.mutated[1]
+					local def = FishConfig.Mutations[first.mutation]
+					local fish = fishById[first.id]
+					local fishName = if fish then Strings.species(fish.data.species) else "?"
+					if def then
+						showToast(T("toast_mutation", fishName, def.emoji .. " " .. Strings.mutation(first.mutation)), COLOR_GOLD, 4)
+					end
+				end
+			end
 		end))
 	end
 end

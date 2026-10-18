@@ -5,6 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local FishConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("FishConfig"))
 local Collection = require(script.Parent:WaitForChild("Collection"))
+local Currents = require(script.Parent:WaitForChild("Currents"))
 
 local Economy = {}
 
@@ -34,10 +35,10 @@ function Economy.applyIncome(profile, ticks, at, multiplier)
 	multiplier = multiplier or 1
 	local total = 0
 	for tankId, tankData in pairs(profile.tanks) do
-		local setBonus = 1 + Collection.bonus(profile, tankId) -- прибавка за собранные наборы этого аквариума
+		local setBonus = (1 + Collection.bonus(profile, tankId)) * Currents.multiplier(profile, tankId, at) -- наборы коллекции × течение
 		for _, fish in ipairs(tankData.fish) do
 			-- прибавку наборов округляем для каждой рыбы: монеты всегда целые
-			local perTick = math.floor(FishConfig.incomeOf(fish.species, fish.variant, math.max(0, at - fish.born)) * setBonus + 0.5)
+			local perTick = math.floor(FishConfig.incomeOf(fish.species, fish.variant, math.max(0, at - fish.born), fish.mutation) * setBonus + 0.5)
 			local amount = perTick * ticks * multiplier
 			if amount > 0 then
 				fish.earned += amount
@@ -54,9 +55,9 @@ end
 function Economy.incomePerTick(profile, at)
 	local total = 0
 	for tankId, tankData in pairs(profile.tanks) do
-		local setBonus = 1 + Collection.bonus(profile, tankId)
+		local setBonus = (1 + Collection.bonus(profile, tankId)) * Currents.multiplier(profile, tankId, at)
 		for _, fish in ipairs(tankData.fish) do
-			total += math.floor(FishConfig.incomeOf(fish.species, fish.variant, math.max(0, at - fish.born)) * setBonus + 0.5)
+			total += math.floor(FishConfig.incomeOf(fish.species, fish.variant, math.max(0, at - fish.born), fish.mutation) * setBonus + 0.5)
 		end
 	end
 	return total

@@ -85,6 +85,11 @@ local EN_VARIANTS = {
 	golden = "Golden",
 	rainbow = "Rainbow",
 }
+local EN_MUTATIONS = {
+	bubble = "Bubbly",
+	glow = "Glowing",
+	pearl = "Pearly",
+}
 local EN_PACKS = {
 	lagoon = "Lagoon Pack",
 	volcano = "Volcano Pack",
@@ -119,6 +124,10 @@ end
 
 function Strings.variant(id)
 	return pick(EN_VARIANTS, FishConfig.Variants, id or "normal")
+end
+
+function Strings.mutation(id)
+	return pick(EN_MUTATIONS, FishConfig.Mutations, id)
 end
 
 function Strings.pack(id)
@@ -209,6 +218,12 @@ local TEXT = {
 		toast_merge_fail = "Нужно 5 одинаковых рыб одного цвета в этом аквариуме",
 		set_row = "Набор %s ✨%s 🌈%s",
 		set_bonus = "+%d%% дохода",
+		current_chip = "🌊 Течение · %s ×%s · %s",
+		toast_current_start = "🌊 Течение в аквариуме «%s»: доход ×%s на %s",
+		toast_mutation = "✨ Мутация! %s: %s",
+		mut_title = "Мутации",
+		mut_row = "%s %s ×%s",
+		mut_count = "%d шт.",
 
 		-- Аквариумы
 		tanks_title = "Аквариумы",
@@ -336,6 +351,12 @@ local TEXT = {
 		toast_merge_fail = "You need 5 identical fish of the same color in this tank",
 		set_row = "Set %s ✨%s 🌈%s",
 		set_bonus = "+%d%% income",
+		current_chip = "🌊 Current · %s ×%s · %s",
+		toast_current_start = "🌊 A current is flowing in %s: income ×%s for %s",
+		toast_mutation = "✨ Mutation! %s: %s",
+		mut_title = "Mutations",
+		mut_row = "%s %s ×%s",
+		mut_count = "%d pcs.",
 
 		tanks_title = "Tanks",
 		tanks_hint = "Each tank has its own fish and pack · income comes from all tanks at once",

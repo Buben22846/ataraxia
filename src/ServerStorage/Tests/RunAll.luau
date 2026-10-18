@@ -482,6 +482,82 @@ return function()
 	Visitors.refresh(bigQueue, T0, Random.new(9), FishConfig.Visitors.QUEUE_SIZE + FishConfig.Shop.SecondHall.extraQueue)
 	check("Second Hall: в очереди на 3 места больше", #bigQueue.visitors.slots == 6 and Visitors.summary(bigQueue, T0, 6).orders[6] ~= nil)
 
+	-- ===== Течения и мутации =====
+	local Currents = require(ServerScriptService.Currents)
+	local CC = FishConfig.Currents
+	check("мутация: множитель по id, неизвестная = 1", FishConfig.mutationMult("pearl") == 1.4 and FishConfig.mutationMult(nil) == 1 and FishConfig.mutationMult("nope") == 1)
+	check("мутация: доход растёт (кит радужный взрослый 100 -> 140)", FishConfig.incomeOf("whale", "rainbow", 3600, "pearl") == 140)
+	check("мутация: выбор по весам даёт только известные", (function()
+		local rng = Random.new(5)
+		local counts = { bubble = 0, glow = 0, pearl = 0 }
+		for _ = 1, 3000 do
+			local id = FishConfig.rollMutation(rng)
+			if counts[id] == nil then
+				return false
+			end
+			counts[id] += 1
+		end
+		return counts.bubble > counts.glow and counts.glow > counts.pearl
+	end)())
+
+	local function currentProfile(fishCount)
+		local profile = { coins = 0, nextFishId = 1, tanks = { lagoon = FishConfig.newTank() }, speciesStats = {}, seen = {} }
+		for i = 1, fishCount do
+			table.insert(profile.tanks.lagoon.fish, { id = i, species = "whale", variant = "normal", born = 0, earned = 0 })
+		end
+		profile.nextFishId = fishCount + 1
+		return profile
+	end
+	local cp = currentProfile(3)
+	local rngC = Random.new(11)
+	Currents.reset(cp, 1000, rngC)
+	check("течение: следующее назначено через 20–40 минут", cp.nextCurrentAt >= 1000 + CC.MIN_GAP and cp.nextCurrentAt <= 1000 + CC.MAX_GAP)
+	check("течение: раньше срока не начинается", Currents.update(cp, cp.nextCurrentAt - 1, rngC) == nil and cp.current == nil)
+	local startAt = cp.nextCurrentAt
+	local started = Currents.update(cp, startAt, rngC)
+	check("течение: в срок начинается в аквариуме с рыбой", started ~= nil and started.kind == "started" and started.tank == "lagoon" and cp.current.endsAt == startAt + CC.DURATION)
+	check("течение: множитель ×1.5 только внутри окна и только в своём аквариуме", Currents.multiplier(cp, "lagoon", startAt + 10) == CC.INCOME_MULT and Currents.multiplier(cp, "lagoon", startAt + CC.DURATION) == 1 and Currents.multiplier(cp, "volcano", startAt + 10) == 1)
+	local calm = currentProfile(1)
+	local calmGain = Economy.applyIncome(calm, 1, 5000, 1)
+	local boosted = currentProfile(1)
+	boosted.current = { tank = "lagoon", startedAt = 4000, endsAt = 6000 }
+	local boostedGain = Economy.applyIncome(boosted, 1, 5000, 1)
+	check("течение: доход аквариума ×1.5", boostedGain == math.floor(calmGain * CC.INCOME_MULT + 0.5))
+	check("течение: во время него новое не начинается", Currents.update(cp, startAt + 60, rngC) == nil)
+	local summaryDuring = Currents.summary(cp, startAt + 60)
+	check("течение: сводка показывает аквариум и остаток времени", summaryDuring.current ~= nil and summaryDuring.current.tank == "lagoon" and summaryDuring.current.left == CC.DURATION - 60)
+	local endedEvent = Currents.update(cp, startAt + CC.DURATION, rngC)
+	local mutatedCount = 0
+	for _, fish in ipairs(cp.tanks.lagoon.fish) do
+		if fish.mutation ~= nil then
+			mutatedCount += 1
+		end
+	end
+	check("течение: после конца мутации получают ровно две рыбы", endedEvent ~= nil and endedEvent.kind == "ended" and #endedEvent.mutated == CC.MUTATED_FISH and mutatedCount == CC.MUTATED_FISH)
+	check("течение: течения нет, следующее назначено", cp.current == nil and cp.nextCurrentAt >= startAt + CC.DURATION + CC.MIN_GAP)
+	local firstMutation = endedEvent.mutated[1].mutation
+	check("мутации: найденные отмечены в сводке", Currents.summary(cp, startAt).mutations[firstMutation].seen == true and Currents.summary(cp, startAt).mutations[firstMutation].count >= 1)
+	local lonely = currentProfile(1)
+	lonely.current = { tank = "lagoon", startedAt = 0, endsAt = 10 }
+	Currents.update(lonely, 20, Random.new(2))
+	check("мутации: с одной рыбой мутирует она одна, повторно не мутирует", lonely.tanks.lagoon.fish[1].mutation ~= nil)
+	local emptyTank = currentProfile(0)
+	Currents.reset(emptyTank, 0, Random.new(3))
+	check("течение: в пустом аквариуме не начинается", Currents.update(emptyTank, emptyTank.nextCurrentAt, Random.new(3)) == nil and emptyTank.current == nil)
+	check("доход с мутацией: ×множитель", (function()
+		local a = currentProfile(1)
+		local b = currentProfile(1)
+		b.tanks.lagoon.fish[1].mutation = "pearl"
+		return Economy.incomePerTick(b, 5000) == math.floor(FishConfig.incomeOf("whale", "normal", 5000, "pearl") + 0.5) and Economy.incomePerTick(b, 5000) > Economy.incomePerTick(a, 5000)
+	end)())
+	local mergeProfile = currentProfile(0)
+	for i = 1, 5 do
+		table.insert(mergeProfile.tanks.lagoon.fish, { id = i, species = "guppy", variant = "normal", born = i, earned = 0, mutation = if i == 2 then "bubble" elseif i == 3 then "glow" else nil })
+	end
+	mergeProfile.nextFishId = 6
+	local mergedOk, mergedFish = Merge.perform(mergeProfile, 1, 100)
+	check("слияние: новая рыба наследует лучшую мутацию", mergedOk == true and mergedFish.mutation == "glow")
+
 	-- ===== Короткая запись чисел =====
 	local Strings = require(ReplicatedStorage.Shared.Strings)
 	check("число: до 1000 без сокращения", Strings.num(0) == "0" and Strings.num(7) == "7" and Strings.num(999) == "999")
