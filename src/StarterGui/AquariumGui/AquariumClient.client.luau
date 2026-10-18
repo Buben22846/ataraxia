@@ -2389,9 +2389,12 @@ do
 
 	-- Пассы: у каждого свой id в FishConfig.Shop, название и описание в Strings
 	local PASS_ROWS = {
-		{ key = "nightWatch", cfg = FishConfig.Shop.NightWatch, title = "shop_night_title", desc = "shop_night_desc" },
-		{ key = "secondHall", cfg = FishConfig.Shop.SecondHall, title = "shop_hall_title", desc = "shop_hall_desc" },
-		{ key = "quickOpen", cfg = FishConfig.Shop.QuickOpen, title = "shop_quick_title", desc = "shop_quick_desc" },
+		{ key = "nightWatch", cfg = FishConfig.Shop.NightWatch, title = "shop_night_title", desc = "shop_night_desc",
+			theme = { skin = "ui_banner_night", icon = "ui_icon_night", bg = Color3.fromRGB(63, 81, 181), title = Color3.fromRGB(255, 241, 168), desc = Color3.fromRGB(220, 226, 255), ribbon = "shop_tag_night" } },
+		{ key = "secondHall", cfg = FishConfig.Shop.SecondHall, title = "shop_hall_title", desc = "shop_hall_desc",
+			theme = { skin = "ui_banner_hall", icon = "ui_icon_hall", bg = Color3.fromRGB(142, 92, 196), title = Color3.fromRGB(255, 255, 255), desc = Color3.fromRGB(240, 226, 255), ribbon = "shop_tag_hall" } },
+		{ key = "quickOpen", cfg = FishConfig.Shop.QuickOpen, title = "shop_quick_title", desc = "shop_quick_desc",
+			theme = { skin = "ui_banner_quick", icon = "ui_icon_quick", bg = Color3.fromRGB(232, 97, 60), title = Color3.fromRGB(255, 225, 74), desc = Color3.fromRGB(255, 236, 224), ribbon = "shop_tag_quick" } },
 	}
 	local function configuredPass(cfg)
 		return cfg ~= nil and (tonumber(cfg.passId) or 0) > 0
@@ -2491,17 +2494,24 @@ do
 	-- parent — куда вставить строку (по умолчанию список магазина).
 	local function addShopRow(order, fraction, titleText, descText, isOwned, onBuy, opts)
 		opts = opts or {}
+		-- theme — цветной баннер пасса: { skin, icon, bg, title, desc, ribbon (ключ Strings) }
+		local theme = opts.theme
+		if theme then
+			opts.banner = true
+			opts.icon = opts.icon or theme.icon
+			opts.ribbonText = opts.ribbonText or (if theme.ribbon then T(theme.ribbon) else nil)
+		end
 		local banner = opts.banner == true
 		local parent = opts.parent or shopPanel.list
 		local row = make("Frame", {
 			Size = ListKit.rowSize(parent, fraction),
-			BackgroundColor3 = if banner then COLOR_GOLD else COLOR_ROW,
+			BackgroundColor3 = if theme then theme.bg elseif banner then COLOR_GOLD else COLOR_ROW,
 			BorderSizePixel = 0,
 			LayoutOrder = order,
 			ZIndex = 12,
 		}, parent)
 		make("UICorner", { CornerRadius = UDim.new(0.12, 0) }, row)
-		UIKit.frame(row, if banner then "ui_banner" else "ui_row")
+		UIKit.frame(row, if theme then theme.skin elseif banner then "ui_banner" else "ui_row")
 		local textX = 0.03
 		if opts.icon then
 			-- иконка слева, текст сдвигается вправо
@@ -2522,8 +2532,8 @@ do
 			end
 		end
 		local textW = 0.65 - textX
-		local titleColor = if banner then Color3.fromRGB(60, 40, 0) else COLOR_GOLD
-		local descColor = if banner then Color3.fromRGB(95, 62, 0) else Color3.fromRGB(190, 220, 230)
+		local titleColor = if theme then theme.title elseif banner then Color3.fromRGB(60, 40, 0) else COLOR_GOLD
+		local descColor = if theme then theme.desc elseif banner then Color3.fromRGB(95, 62, 0) else Color3.fromRGB(190, 220, 230)
 		if banner then
 			-- лента на верхней кромке баннера
 			local ribbon = make("TextLabel", {
@@ -2646,7 +2656,7 @@ do
 		for _, row in ipairs(PASS_ROWS) do
 			if configuredPass(row.cfg) then
 				order += 1
-				addShopRow(order, 0.28, T(row.title), T(row.desc), owned(row.key), buyPass(row.cfg))
+				addShopRow(order, 0.32, T(row.title), T(row.desc), owned(row.key), buyPass(row.cfg), { theme = row.theme })
 			end
 		end
 

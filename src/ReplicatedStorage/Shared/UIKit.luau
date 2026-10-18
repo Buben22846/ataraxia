@@ -25,6 +25,9 @@ local SLICE = {
 	ui_row = { size = 12, corner = 4 },
 	-- билет не квадратный: ширина w, высота h, угол по горизонтали cx и по вертикали cy
 	ui_banner = { size = 24, corner = 8 },
+	ui_banner_night = { size = 24, corner = 8 },
+	ui_banner_hall = { size = 24, corner = 8 },
+	ui_banner_quick = { size = 24, corner = 8 },
 	ui_ticket = { w = 32, h = 16, cx = 10, cy = 5 },
 	ui_ticket_down = { w = 32, h = 16, cx = 10, cy = 5 },
 }

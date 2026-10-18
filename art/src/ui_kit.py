@@ -124,10 +124,10 @@ def ticket(down=False):
     return img
 
 
-def banner():
-    """Золотой баннер 24x24 для главного предложения: тёмно-золотая внутренняя рамка и искры в углах (срез 8 px)."""
-    img = box(24, 24, 3, "#ffca28", "#fff0a8", "#d99a00", raised=True, edge_rows=2)
-    inner = "#b9770e"
+def banner(fill="#ffca28", light="#fff0a8", shade="#d99a00", inner="#b9770e", spark="#ffffff"):
+    """Баннер 24x24 для предложений магазина: внутренняя рамка и искры в углах (срез 8 px).
+    По умолчанию золотой (главное предложение); цветные варианты — для остальных пассов."""
+    img = box(24, 24, 3, fill, light, shade, raised=True, edge_rows=2)
     for x in range(4, 20):
         for y in (3, 20):
             img.putpixel((x, y), hx(inner))
@@ -135,8 +135,67 @@ def banner():
         for x in (3, 20):
             img.putpixel((x, y), hx(inner))
     for (sx, sy) in ((6, 6), (17, 6), (6, 17), (17, 17)):
-        img.putpixel((sx, sy), hx("#ffffff"))
+        img.putpixel((sx, sy), hx(spark))
     return img
+
+
+def icon(rows, colors):
+    """Иконка 12x12 по строкам-символам ("." — прозрачно)."""
+    img = Image.new("RGBA", (len(rows[0]), len(rows)), (0, 0, 0, 0))
+    for y, line in enumerate(rows):
+        for x, ch in enumerate(line):
+            if ch != ".":
+                img.putpixel((x, y), hx(colors[ch]))
+    return img
+
+
+# Ночной смотритель: месяц и звезда
+ICON_NIGHT = icon([
+    "....oooo....",
+    "..oommmo....",
+    ".ommmmo...o.",
+    ".ommmo...oso",
+    "ommmmo....o.",
+    "ommmmo......",
+    "ommmmmo.....",
+    "ommmmmmoooo.",
+    ".ommmmmmmmo.",
+    ".oommmmmmoo.",
+    "..oommmmoo..",
+    "....oooo....",
+], {"o": OUT, "m": "#fff1a8", "s": "#ffffff"})
+
+# Второй зал: здание музея с колоннами
+ICON_HALL = icon([
+    ".....oo.....",
+    "...oowwoo...",
+    ".oowwwwwwoo.",
+    "oooooooooooo",
+    ".o.w.w.w.wo.",
+    ".o.w.w.w.wo.",
+    ".o.w.w.w.wo.",
+    ".o.w.w.w.wo.",
+    ".o.w.w.w.wo.",
+    "oooooooooooo",
+    "owwwwwwwwwwo",
+    "oooooooooooo",
+], {"o": OUT, "w": "#f2e6ff"})
+
+# Быстрое открытие: молния
+ICON_QUICK = icon([
+    "......oooo..",
+    ".....oyyo...",
+    "....oyyo....",
+    "...oyyo.....",
+    "..oyyyoooo..",
+    ".oyyyyyyyo..",
+    "..ooooyyo...",
+    ".....oyo....",
+    "....oyo.....",
+    "...oyo......",
+    "...oo.......",
+    "............",
+], {"o": OUT, "y": "#ffe14a"})
 
 
 def coin():
@@ -164,6 +223,12 @@ def coin():
 
 ASSETS = {
     "ui_banner": banner(),
+    "ui_banner_night": banner("#3f51b5", "#7986cb", "#283593", "#1a237e", "#fff1a8"),
+    "ui_banner_hall": banner("#8e5cc4", "#c39be8", "#6a3d9a", "#4a2470", "#ffffff"),
+    "ui_banner_quick": banner("#e8613c", "#ff9a76", "#b8401f", "#7f2a12", "#ffe14a"),
+    "ui_icon_night": ICON_NIGHT,
+    "ui_icon_hall": ICON_HALL,
+    "ui_icon_quick": ICON_QUICK,
     "ui_coin": coin(),
     "ui_ticket": ticket(),
     "ui_ticket_down": ticket(True),
