@@ -87,6 +87,7 @@ local function newProfile()
 		nextCurrentAt = 0, -- когда начнётся следующее течение (os.time)
 		mutSeen = {}, -- { [мутация] = true }: какие мутации у игрока когда-либо были
 		events = {}, -- { [id ивента] = { candy, welcomed, online } }
+		social = {}, -- гости: лайки, бонус кормления, кого кормил и лайкал (см. Social)
 	}
 end
 

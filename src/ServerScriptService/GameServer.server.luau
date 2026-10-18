@@ -22,6 +22,7 @@ local Events = require(ServerScriptService:WaitForChild("Events"))
 local Badges = require(ServerScriptService:WaitForChild("Badges"))
 local Currents = require(ServerScriptService:WaitForChild("Currents"))
 local Visitors = require(ServerScriptService:WaitForChild("Visitors"))
+local Social = require(ServerScriptService:WaitForChild("Social"))
 
 -- ===== НАСТРОЙКИ =====
 -- Аквариумы игрока лежат в профиле (profile.tanks[id] = { slots, fish }), максимум мест и цены — в FishConfig.
@@ -50,6 +51,8 @@ local shopStateEvent = remotes:WaitForChild("ShopState")
 local settingsEvent = remotes:WaitForChild("Settings")
 local currentStateEvent = remotes:WaitForChild("CurrentState")
 local eventStateEvent = remotes:WaitForChild("EventState")
+local socialActionEvent = remotes:WaitForChild("SocialAction")
+local socialStateEvent = remotes:WaitForChild("SocialState")
 
 -- ===== Покупки за Robux =====
 -- Геймпасс «x2 монеты» проверяем у MarketplaceService при входе и после покупки; результат помним на сервере.
@@ -245,7 +248,7 @@ local function updateLeaderstats(player, profile)
 	if stats == nil then
 		stats = Instance.new("Folder")
 		stats.Name = "leaderstats"
-		for _, name in ipairs({ "Fish", "Museum" }) do
+		for _, name in ipairs({ "Fish", "Museum", "Likes" }) do
 			local value = Instance.new("IntValue")
 			value.Name = name
 			value.Parent = stats
@@ -259,6 +262,10 @@ local function updateLeaderstats(player, profile)
 	end
 	if museum then
 		museum.Value = Visitors.rank(if profile.visitors then profile.visitors.completed or 0 else 0)
+	end
+	local likes = stats:FindFirstChild("Likes")
+	if likes then
+		likes.Value = Social.ensure(profile, os.time()).likes
 	end
 end
 
@@ -828,6 +835,84 @@ adminCommandEvent.OnServerEvent:Connect(function(player, cmd, value, extra)
 	pushState(player)
 end)
 
+-- ===== Гости в аквариуме =====
+-- Клиент присылает действие и UserId хозяина (и аквариум для просмотра). Хозяин должен быть на этом сервере.
+-- "list" — кто на сервере; "view" — чужой аквариум; "feed" — покормить; "like" — лайк.
+local function serverPlayersList(viewer)
+	local list = {}
+	for _, other in ipairs(Players:GetPlayers()) do
+		local profile = if other ~= viewer and loaded[other] then PlayerData.get(other) else nil
+		if profile ~= nil then
+			table.insert(list, {
+				userId = other.UserId,
+				name = other.DisplayName,
+				likes = Social.ensure(profile, os.time()).likes,
+				fish = Economy.fishCount(profile),
+			})
+		end
+	end
+	return list
+end
+
+local function sendView(player, profile, owner, ownerProfile, tankId, notice)
+	local view = Social.view(profile, ownerProfile, owner.UserId, tankId, os.time())
+	view.name = owner.DisplayName
+	view.notice = notice
+	socialStateEvent:FireClient(player, { kind = "view", view = view })
+end
+
+socialActionEvent.OnServerEvent:Connect(function(player, action, ownerId, tankId)
+	if not allow(player, "Social", 2, 5) then
+		return
+	end
+	local profile = PlayerData.get(player)
+	if profile == nil or typeof(action) ~= "string" then
+		return
+	end
+	if action == "list" then
+		socialStateEvent:FireClient(player, { kind = "list", players = serverPlayersList(player) })
+		return
+	end
+	if typeof(ownerId) ~= "number" or ownerId ~= ownerId then
+		return
+	end
+	local owner = Players:GetPlayerByUserId(ownerId)
+	local ownerProfile = if owner ~= nil and owner ~= player and loaded[owner] then PlayerData.get(owner) else nil
+	if ownerProfile == nil then
+		socialStateEvent:FireClient(player, { kind = "gone" })
+		return
+	end
+	if tankId ~= nil and (typeof(tankId) ~= "string" or FishConfig.Tanks[tankId] == nil) then
+		tankId = nil
+	end
+	local now = os.time()
+	Social.prune(profile, now)
+
+	if action == "view" then
+		sendView(player, profile, owner, ownerProfile, tankId)
+	elseif action == "feed" then
+		local ok, result = Social.feed(profile, player.UserId, ownerProfile, owner.UserId, now)
+		if ok then
+			if result.tickets > 0 then
+				sendVisitors(player, profile)
+			end
+			socialStateEvent:FireClient(owner, { kind = "fed", by = player.DisplayName, boost = FishConfig.Social.BOOST, seconds = FishConfig.Social.BOOST_TIME })
+			sendView(player, profile, owner, ownerProfile, tankId, { kind = "fed", tickets = result.tickets })
+		else
+			sendView(player, profile, owner, ownerProfile, tankId, { kind = result })
+		end
+	elseif action == "like" then
+		local ok, reason = Social.like(profile, player.UserId, ownerProfile, owner.UserId, now)
+		if ok then
+			updateLeaderstats(owner, ownerProfile)
+			socialStateEvent:FireClient(owner, { kind = "liked", by = player.DisplayName })
+			sendView(player, profile, owner, ownerProfile, tankId, { kind = "liked" })
+		else
+			sendView(player, profile, owner, ownerProfile, tankId, { kind = reason })
+		end
+	end
+end)
+
 -- ===== Обработка покупок за Robux =====
 MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passId, wasPurchased)
 	if not wasPurchased or passId == 0 then
@@ -909,7 +994,7 @@ task.spawn(function()
 						Events.add(profile, eventDef.current, os.time())
 					end
 				end
-				local earned = Economy.applyIncome(profile, 1, os.time(), incomeMultiplier(player))
+				local earned = Economy.applyIncome(profile, 1, os.time(), incomeMultiplier(player), Social.multiplier(profile, os.time()))
 				Telemetry.addIncome(player, "fish_income", earned)
 				if ready[player] then
 					sendCoins(player, profile)

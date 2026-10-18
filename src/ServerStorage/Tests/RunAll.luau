@@ -642,6 +642,50 @@ return function()
 	check("аналитика: повторный flush ничего не шлёт", #sent == 2)
 	Telemetry._setSender(nil)
 
+	-- ===== Гости в аквариуме (Social) =====
+	do
+		local Social = require(ServerScriptService.Social)
+		local Economy = require(ServerScriptService.Economy)
+		local SC = FishConfig.Social
+		local T0 = 1_800_000_000
+		local guest = M._newProfile()
+		local owner = M._newProfile()
+		table.insert(owner.tanks.lagoon.fish, { id = 1, species = "guppy", variant = "normal", born = T0 - 10, earned = 0 })
+		check("гости: себя кормить нельзя", select(2, Social.feed(guest, 1, guest, 1, T0)) == "self")
+		local ok, res = Social.feed(guest, 1, owner, 2, T0)
+		check("гости: кормление даёт билеты гостю", ok and res.tickets == SC.FEED_TICKETS and guest.visitors.tickets == SC.FEED_TICKETS)
+		check("гости: хозяин получает бонус дохода", Social.multiplier(owner, T0 + 1) == 1 + SC.BOOST and Social.multiplier(owner, T0 + SC.BOOST_TIME) == 1)
+		check("гости: повторно кормить рано", select(2, Social.feed(guest, 1, owner, 2, T0 + 60)) == "cooldown" and Social.feedLeft(guest, 2, T0 + 60) == SC.FEED_COOLDOWN - 60)
+		check("гости: после перерыва кормить можно", (Social.feed(guest, 1, owner, 2, T0 + SC.FEED_COOLDOWN)))
+		-- лимит билетов в сутки
+		local g2 = M._newProfile()
+		local rewarded = 0
+		for i = 1, SC.FEED_REWARDS_PER_DAY + 5 do
+			local _, r = Social.feed(g2, 10, M._newProfile(), 100 + i, T0)
+			rewarded += r.tickets
+		end
+		check("гости: билеты за кормление ограничены в сутки", rewarded == SC.FEED_REWARDS_PER_DAY * SC.FEED_TICKETS)
+		-- лайки
+		check("гости: себя лайкать нельзя", select(2, Social.like(guest, 1, guest, 1, T0)) == "self")
+		check("гости: лайк засчитан", Social.like(guest, 1, owner, 2, T0) == true and owner.social.likes == 1 and owner.social.likesWeek == 1)
+		check("гости: второй лайк в тот же день нельзя", select(2, Social.like(guest, 1, owner, 2, T0 + 100)) == "already")
+		check("гости: на следующий день лайк снова можно", Social.like(guest, 1, owner, 2, T0 + 86400) == true and owner.social.likes == 2)
+		Social.ensure(owner, T0 + 8 * 86400)
+		check("гости: недельные лайки сбрасываются с новой неделей", owner.social.likesWeek == 0 and owner.social.likes == 2)
+		-- просмотр
+		local view = Social.view(guest, owner, 2, "volcano", T0)
+		check("гости: просмотр показывает открытый аквариум и его рыб", view.tank == "lagoon" and #view.fish == 1 and view.fish[1].species == "guppy" and view.likes == 2)
+		-- доход с бонусом
+		local p = M._newProfile()
+		table.insert(p.tanks.lagoon.fish, { id = 1, species = "whale", variant = "normal", born = T0 - 1_000_000, earned = 0 })
+		local base = Economy.applyIncome(p, 1, T0, 1, 1)
+		local boosted = Economy.applyIncome(p, 1, T0, 1, 1 + SC.BOOST)
+		check("гости: бонус кормления увеличивает доход", boosted > base)
+		-- старые записи чистятся
+		Social.prune(guest, T0 + 10 * 86400)
+		check("гости: старые записи о кормлении и лайках удаляются", next(guest.social.fedAt) == nil and next(guest.social.likedDay) == nil)
+	end
+
 	-- ===== Конфиг =====
 	for packId, pack in pairs(FishConfig.Packs) do
 		local sum = 0

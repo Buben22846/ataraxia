@@ -31,11 +31,13 @@ end
 -- Начислить доход за `ticks` тиков. Возраст рыб считаем на момент `at` (os.time).
 -- Плюсуем к монетам, к заработку рыбы и к статистике вида. Возвращает начисленную сумму.
 -- multiplier (необязателен) — бонус игрока, например x2 по геймпассу; он применяется к каждому доходу.
-function Economy.applyIncome(profile, ticks, at, multiplier)
+-- extra (необязателен) — дробный бонус ко всем аквариумам (кормление гостями), считается вместе с наборами и округляется.
+function Economy.applyIncome(profile, ticks, at, multiplier, extra)
 	multiplier = multiplier or 1
+	extra = extra or 1
 	local total = 0
 	for tankId, tankData in pairs(profile.tanks) do
-		local setBonus = (1 + Collection.bonus(profile, tankId)) * Currents.multiplier(profile, tankId, at) -- наборы коллекции × течение
+		local setBonus = (1 + Collection.bonus(profile, tankId)) * Currents.multiplier(profile, tankId, at) * extra -- наборы коллекции × течение × кормление
 		for _, fish in ipairs(tankData.fish) do
 			-- прибавку наборов округляем для каждой рыбы: монеты всегда целые
 			local perTick = math.floor(FishConfig.incomeOf(fish.species, fish.variant, math.max(0, at - fish.born), fish.mutation) * setBonus + 0.5)

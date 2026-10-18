@@ -3014,6 +3014,434 @@ do
 	end
 end
 
+-- ===== Гости в аквариуме (этап 19) =====
+-- Кнопка 👥 рядом с выбором аквариума: список игроков на сервере. Можно открыть чужой аквариум
+-- (его фон и рыбы плавают на весь экран), покормить рыб (раз в 10 минут на игрока) и поставить лайк (раз в сутки).
+-- Всё проверяет сервер (Social): клиент шлёт только действие и UserId хозяина.
+do
+	local socialAction = remotes:WaitForChild("SocialAction", 10)
+	local socialState = remotes:WaitForChild("SocialState", 10)
+	if socialAction ~= nil and socialState ~= nil then
+		local SocialService = game:GetService("SocialService")
+		local visit = { view = nil, receivedAt = 0, fish = {}, token = 0 }
+
+		tankButton.Size = UDim2.fromScale(0.6, TOP_H) -- место под кнопку гостей
+		local guestsButton = make("TextButton", {
+			Name = "GuestsButton",
+			Position = UDim2.fromScale(0.63, TANK_ROW_Y),
+			Size = UDim2.fromScale(0.11, TOP_H),
+			BackgroundColor3 = COLOR_PANEL,
+			BorderSizePixel = 0,
+			Text = "👥",
+			TextScaled = true,
+			MinText = 14,
+			MaxText = 30,
+			TextColor3 = WHITE,
+			Font = FONT,
+			ZIndex = 3,
+		}, gui)
+		make("UICorner", { CornerRadius = UDim.new(0.25, 0) }, guestsButton)
+
+		-- ----- Список игроков -----
+		local playersPanel = makePanel("PlayersPanel")
+		playersPanel.title.Text = T("guests_title")
+		addHint(playersPanel, T("guests_hint"))
+		ListKit.scroll(playersPanel)
+
+		local function listRow(order, leftText, subText, buttonText, onClick)
+			local row = make("Frame", {
+				Size = ListKit.rowSize(playersPanel.list, 0.2),
+				BackgroundColor3 = COLOR_ROW,
+				BorderSizePixel = 0,
+				LayoutOrder = order,
+				ZIndex = 12,
+			}, playersPanel.list)
+			make("UICorner", { CornerRadius = UDim.new(0.15, 0) }, row)
+			UIKit.frame(row, "ui_row")
+			make("TextLabel", {
+				Position = UDim2.fromScale(0.04, 0.1),
+				Size = UDim2.fromScale(0.58, 0.45),
+				BackgroundTransparency = 1,
+				Text = leftText,
+				TextScaled = true,
+				MinText = 10,
+				MaxText = 20,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextColor3 = WHITE,
+				Font = FONT,
+				ZIndex = 13,
+			}, row)
+			make("TextLabel", {
+				Position = UDim2.fromScale(0.04, 0.55),
+				Size = UDim2.fromScale(0.58, 0.35),
+				BackgroundTransparency = 1,
+				Text = subText,
+				TextScaled = true,
+				MinText = 8,
+				MaxText = 16,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextColor3 = COLOR_MUTED,
+				Font = FONT,
+				ZIndex = 13,
+			}, row)
+			local button = make("TextButton", {
+				Position = UDim2.fromScale(0.65, 0.18),
+				Size = UDim2.fromScale(0.32, 0.64),
+				BackgroundColor3 = COLOR_BUTTON,
+				BorderSizePixel = 0,
+				Text = buttonText,
+				TextScaled = true,
+				MinText = 9,
+				MaxText = 20,
+				TextColor3 = WHITE,
+				Font = FONT,
+				ZIndex = 13,
+			}, row)
+			make("UICorner", { CornerRadius = UDim.new(0.25, 0) }, button)
+			button.Activated:Connect(onClick)
+		end
+
+		local function fillList(players)
+			clearRows(playersPanel.list)
+			table.sort(players, function(a, b)
+				return (a.likes or 0) > (b.likes or 0)
+			end)
+			for index, entry in ipairs(players) do
+				listRow(index, tostring(entry.name), T("guests_row", entry.likes or 0, entry.fish or 0), T("guests_visit"), function()
+					playersPanel.overlay.Visible = false
+					socialAction:FireServer("view", entry.userId)
+				end)
+			end
+			if #players == 0 then
+				listRow(1, T("guests_empty"), T("guests_empty_sub"), T("guests_invite"), function()
+					pcall(function()
+						SocialService:PromptGameInvite(localPlayer)
+					end)
+				end)
+			end
+		end
+
+		guestsButton.Activated:Connect(function()
+			clearRows(playersPanel.list)
+			playersPanel.overlay.Visible = true
+			socialAction:FireServer("list")
+		end)
+
+		-- ----- Чужой аквариум на весь экран -----
+		local view = make("Frame", {
+			Name = "VisitView",
+			Size = UDim2.fromScale(1, 1),
+			BackgroundColor3 = Color3.fromRGB(20, 110, 140),
+			BorderSizePixel = 0,
+			Active = true, -- нажатия не проходят к своему аквариуму
+			Visible = false,
+			ZIndex = 7,
+		}, gui)
+		local viewBg = make("ImageLabel", {
+			Name = "Background",
+			Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = 1,
+			ScaleType = Enum.ScaleType.Crop,
+			ZIndex = 7,
+		}, view)
+		local fishLayer = make("Frame", {
+			Name = "Fish",
+			Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = 1,
+			ZIndex = 8,
+		}, view)
+
+		local header = make("Frame", {
+			Name = "Header",
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.fromScale(0.5, TOP_Y),
+			Size = UDim2.fromScale(0.96, 0.15),
+			BackgroundColor3 = COLOR_PANEL,
+			BackgroundTransparency = 0.1,
+			BorderSizePixel = 0,
+			ZIndex = 9,
+		}, view)
+		make("UICorner", { CornerRadius = UDim.new(0.12, 0) }, header)
+		UIKit.frame(header, "ui_panel")
+		local nameLabel = make("TextLabel", {
+			Position = UDim2.fromScale(0.04, 0.08),
+			Size = UDim2.fromScale(0.92, 0.3),
+			BackgroundTransparency = 1,
+			TextScaled = true,
+			MinText = 11,
+			MaxText = 24,
+			TextColor3 = COLOR_GOLD,
+			Font = FONT,
+			ZIndex = 10,
+		}, header)
+		local infoLabel = make("TextLabel", {
+			Position = UDim2.fromScale(0.04, 0.38),
+			Size = UDim2.fromScale(0.92, 0.2),
+			BackgroundTransparency = 1,
+			TextScaled = true,
+			MinText = 8,
+			MaxText = 16,
+			TextColor3 = WHITE,
+			Font = FONT,
+			ZIndex = 10,
+		}, header)
+		local tabs = make("Frame", {
+			Position = UDim2.fromScale(0.03, 0.62),
+			Size = UDim2.fromScale(0.94, 0.3),
+			BackgroundTransparency = 1,
+			ZIndex = 10,
+		}, header)
+		make("UIListLayout", {
+			FillDirection = Enum.FillDirection.Horizontal,
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			Padding = UDim.new(0.015, 0),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}, tabs)
+
+		local function bottomButton(name, posX, width, color)
+			local button = make("TextButton", {
+				Name = name,
+				AnchorPoint = Vector2.new(0, 1),
+				Position = UDim2.fromScale(posX, 0.985),
+				Size = UDim2.fromScale(width, 0.085),
+				BackgroundColor3 = color,
+				BorderSizePixel = 0,
+				TextScaled = true,
+				MinText = 10,
+				MaxText = 24,
+				TextColor3 = WHITE,
+				Font = FONT,
+				ZIndex = 9,
+			}, view)
+			make("UICorner", { CornerRadius = UDim.new(0.2, 0) }, button)
+			return button
+		end
+		local feedButton = bottomButton("Feed", 0.02, 0.37, COLOR_BUTTON)
+		local likeButton = bottomButton("Like", 0.41, 0.3, COLOR_WARN)
+		local backButton = bottomButton("Back", 0.73, 0.25, COLOR_PANEL)
+		backButton.Text = T("guests_back")
+
+		local function clearFish()
+			visit.token += 1
+			for _, label in ipairs(visit.fish) do
+				label:Destroy()
+			end
+			visit.fish = {}
+		end
+
+		local function swimLoop(label, sprite, species, token)
+			local facingRight = true
+			while visit.token == token and label.Parent ~= nil do
+				local target = randomPoint()
+				local from = label.Position
+				local dx = target.X.Scale - from.X.Scale
+				local dy = target.Y.Scale - from.Y.Scale
+				local distance = math.sqrt(dx * dx + dy * dy)
+				if sprite ~= nil and dx ~= 0 and (dx > 0) ~= facingRight then
+					facingRight = dx > 0
+					Sprites.apply(sprite, species, not facingRight)
+				end
+				local tween = TweenService:Create(label, TweenInfo.new(math.max(distance / FISH_SPEED, 1), Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), { Position = target })
+				tween:Play()
+				tween.Completed:Wait()
+				task.wait(math.random() * 1.5)
+			end
+		end
+
+		local function spawnFish(data, token)
+			local species = FishConfig.Species[data.species]
+			if species == nil then
+				return
+			end
+			local label = make("TextLabel", {
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Size = FISH_SIZE,
+				Position = randomPoint(),
+				BackgroundTransparency = 1,
+				Text = species.emoji,
+				TextScaled = true,
+				ZIndex = 8,
+			}, fishLayer)
+			make("UIAspectRatioConstraint", { AspectRatio = 1, DominantAxis = Enum.DominantAxis.Width }, label)
+			make("UISizeConstraint", { MinSize = Vector2.new(40, 40), MaxSize = Vector2.new(96, 96) }, label)
+			make("UIScale", { Scale = FishConfig.stageFor(data.age or 0).scale }, label)
+			local sprite = make("ImageLabel", {
+				Size = UDim2.fromScale(1, 1),
+				BackgroundTransparency = 1,
+				ScaleType = Enum.ScaleType.Fit,
+				ZIndex = 8,
+			}, label)
+			if Sprites.apply(sprite, data.species, false) then
+				label.Text = ""
+			else
+				sprite:Destroy()
+				sprite = nil
+			end
+			if data.variant ~= nil and data.variant ~= "normal" then
+				local variant = FishConfig.variantOf(data.variant)
+				local ring = make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ZIndex = 8 }, label)
+				make("UICorner", { CornerRadius = UDim.new(0.5, 0) }, ring)
+				local stroke = make("UIStroke", { Color = variant.color, Thickness = 3 }, ring)
+				if data.variant == "rainbow" then
+					task.spawn(function()
+						while visit.token == token and label.Parent ~= nil do
+							stroke.Color = Color3.fromHSV((os.clock() * 0.3) % 1, 0.6, 1)
+							task.wait(0.1)
+						end
+					end)
+				end
+			end
+			table.insert(visit.fish, label)
+			task.spawn(swimLoop, label, sprite, data.species, token)
+		end
+
+		local function minutesText(seconds)
+			seconds = math.max(0, math.ceil(seconds))
+			return string.format("%d:%02d", seconds // 60, seconds % 60)
+		end
+
+		-- Кнопки и строка состояния (таймеры считаем на клиенте от момента ответа сервера)
+		local function refreshButtons()
+			local v = visit.view
+			if v == nil then
+				return
+			end
+			local passed = os.clock() - visit.receivedAt
+			local feedLeft = (v.feedLeft or 0) - passed
+			if feedLeft > 0 then
+				feedButton.Text = T("guests_feed_wait", minutesText(feedLeft))
+				feedButton.BackgroundColor3 = COLOR_MUTED
+			else
+				feedButton.Text = T("guests_feed")
+				feedButton.BackgroundColor3 = COLOR_BUTTON
+			end
+			likeButton.Text = if v.canLike then T("guests_like") else T("guests_liked")
+			likeButton.BackgroundColor3 = if v.canLike then COLOR_WARN else COLOR_MUTED
+			local boostLeft = (v.boostLeft or 0) - passed
+			local info = T("guests_likes", v.likes or 0) .. " · " .. T("guests_fish", #v.fish)
+			if boostLeft > 0 then
+				info ..= " · " .. T("guests_boost", minutesText(boostLeft))
+			end
+			infoLabel.Text = info
+		end
+
+		local function showView(v)
+			local sameOwner = visit.view ~= nil and visit.view.userId == v.userId and visit.view.tank == v.tank
+			visit.view = v
+			visit.receivedAt = os.clock()
+			nameLabel.Text = T("guests_aquarium", tostring(v.name))
+			-- вкладки аквариумов
+			for _, child in ipairs(tabs:GetChildren()) do
+				if child:IsA("GuiObject") then
+					child:Destroy()
+				end
+			end
+			for index, tankId in ipairs(v.tanks or {}) do
+				local def = FishConfig.Tanks[tankId]
+				if def ~= nil then
+					local tab = make("TextButton", {
+						Size = UDim2.fromScale(0.15, 1),
+						BackgroundColor3 = if tankId == v.tank then COLOR_GOLD else COLOR_PANEL,
+						BorderSizePixel = 0,
+						Text = def.emoji,
+						TextScaled = true,
+						MinText = 10,
+						MaxText = 24,
+						TextColor3 = WHITE,
+						LayoutOrder = index,
+						ZIndex = 11,
+					}, tabs)
+					make("UICorner", { CornerRadius = UDim.new(0.25, 0) }, tab)
+					tab.Activated:Connect(function()
+						if visit.view ~= nil and tankId ~= visit.view.tank then
+							socialAction:FireServer("view", visit.view.userId, tankId)
+						end
+					end)
+				end
+			end
+			-- фон и рыбы (пересоздаём, только если сменился хозяин или аквариум)
+			if not sameOwner then
+				local def = FishConfig.Tanks[v.tank]
+				if def ~= nil then
+					view.BackgroundColor3 = def.color
+					viewBg.Visible = def.background ~= nil and Sprites.apply(viewBg, def.background, false)
+				end
+				clearFish()
+				local token = visit.token
+				for _, data in ipairs(v.fish or {}) do
+					spawnFish(data, token)
+				end
+			end
+			refreshButtons()
+			view.Visible = true
+			-- результат действия
+			local notice = v.notice
+			if notice ~= nil then
+				if notice.kind == "fed" then
+					Sfx.play("reward")
+					showToast(if (notice.tickets or 0) > 0 then T("guests_fed_tickets", notice.tickets) else T("guests_fed"), COLOR_BUTTON, 3)
+				elseif notice.kind == "liked" then
+					showToast(T("guests_like_done"), COLOR_WARN, 2)
+				elseif notice.kind == "cooldown" then
+					showToast(T("guests_feed_cooldown"), nil, 2)
+				elseif notice.kind == "already" then
+					showToast(T("guests_like_already"), nil, 2)
+				end
+			end
+		end
+
+		local function closeView()
+			view.Visible = false
+			visit.view = nil
+			clearFish()
+		end
+
+		feedButton.Activated:Connect(function()
+			local v = visit.view
+			if v ~= nil then
+				socialAction:FireServer("feed", v.userId, v.tank)
+			end
+		end)
+		likeButton.Activated:Connect(function()
+			local v = visit.view
+			if v ~= nil and v.canLike then
+				socialAction:FireServer("like", v.userId, v.tank)
+			end
+		end)
+		backButton.Activated:Connect(closeView)
+
+		socialState.OnClientEvent:Connect(function(message)
+			if typeof(message) ~= "table" then
+				return
+			end
+			if message.kind == "list" then
+				fillList(message.players or {})
+			elseif message.kind == "view" and typeof(message.view) == "table" then
+				showView(message.view)
+			elseif message.kind == "gone" then
+				if view.Visible then
+					closeView()
+				end
+				showToast(T("guests_gone"), nil, 3)
+			elseif message.kind == "fed" then
+				showToast(T("guests_fed_you", tostring(message.by), math.floor((message.boost or 0) * 100 + 0.5), (message.seconds or 0) // 60), COLOR_BUTTON, 5)
+			elseif message.kind == "liked" then
+				showToast(T("guests_liked_you", tostring(message.by)), COLOR_WARN, 4)
+			end
+		end)
+
+		-- таймеры на кнопках
+		task.spawn(function()
+			while true do
+				task.wait(1)
+				if view.Visible then
+					refreshButtons()
+				end
+			end
+		end)
+	end
+end
+
 -- ===== Обучение =====
 local tutorialPlate, tutorialText, tutorialButton
 local tutorialHighlight, tutorialPulse, tutorialTarget

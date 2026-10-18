@@ -94,6 +94,12 @@
         },
         "EventState": {
           "$className": "RemoteEvent"
+        },
+        "SocialAction": {
+          "$className": "RemoteEvent"
+        },
+        "SocialState": {
+          "$className": "RemoteEvent"
         }
       }
     },
@@ -120,6 +126,9 @@
       },
       "Events": {
         "$path": "src/ServerScriptService/Events.luau"
+      },
+      "Social": {
+        "$path": "src/ServerScriptService/Social.luau"
       },
       "Badges": {
         "$path": "src/ServerScriptService/Badges.luau"

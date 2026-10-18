@@ -464,4 +464,17 @@ FishConfig.SetTiers = {
 	{ id = "rainbow", variant = "rainbow", bonus = 0.50 },
 }
 
+-- ===== Гости в аквариуме (игроки на одном сервере) =====
+-- Покормить чужих рыб можно раз в FEED_COOLDOWN на каждого игрока: хозяин получает +BOOST к доходу на BOOST_TIME,
+-- гость — FEED_TICKETS билетов музея (не больше FEED_REWARDS_PER_DAY раз в сутки, чтобы нельзя было фармить).
+-- Лайк — раз в сутки (UTC) на каждого игрока. Себя кормить и лайкать нельзя.
+FishConfig.Social = {
+	FEED_COOLDOWN = 10 * 60,
+	BOOST = 0.10,
+	BOOST_TIME = 10 * 60,
+	FEED_TICKETS = 1,
+	FEED_REWARDS_PER_DAY = 20,
+	VIEW_FISH_MAX = 40, -- сколько рыб чужого аквариума присылаем за раз
+}
+
 return FishConfig
