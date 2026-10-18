@@ -624,6 +624,17 @@ local function addHint(panel, text)
 end
 
 local function clearRows(list)
+	-- Список обновляется каждые несколько секунд: запоминаем прокрутку и возвращаем её после перестройки строк
+	if list:IsA("ScrollingFrame") then
+		local keepY = list.CanvasPosition.Y
+		if keepY > 0 then
+			task.spawn(function()
+				game:GetService("RunService").Heartbeat:Wait()
+				game:GetService("RunService").Heartbeat:Wait()
+				list.CanvasPosition = Vector2.new(0, keepY)
+			end)
+		end
+	end
 	for _, child in ipairs(list:GetChildren()) do
 		if child:IsA("GuiObject") then
 			child:Destroy()
