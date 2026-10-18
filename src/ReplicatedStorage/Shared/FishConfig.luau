@@ -354,11 +354,11 @@ end
 --   golden — первая золотая рыба; rainbow — первая радужная; mutation — первая мутация;
 --   set — собран любой набор «все виды аквариума»; museum3 — ранг музея 3; abyss — открыта Бездна
 FishConfig.Badges = {
-	golden = 0,
-	rainbow = 0,
-	mutation = 0,
-	set = 0,
-	museum3 = 0,
+	golden = 523630835642282,
+	rainbow = 138098649336709,
+	mutation = 2901772893513393,
+	set = 778650768347445,
+	museum3 = 85139715503978,
 	abyss = 0,
 }
 
