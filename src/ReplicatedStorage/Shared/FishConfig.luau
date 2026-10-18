@@ -508,4 +508,61 @@ FishConfig.Leaderboards = {
 	READ_EVERY = 180, -- как часто сервер перечитывает топ
 }
 
+-- ===== Золотые пузырьки =====
+-- Раз в GAP_MIN..GAP_MAX секунд (пока игрок в игре) сервер выпускает золотой пузырёк; он поднимается LIFE секунд.
+-- Кто успеет нажать, получает монеты за REWARD_TICKS тиков своего дохода (не меньше REWARD_MIN). Обычные пузырьки
+-- просто лопаются (только на клиенте, без награды).
+FishConfig.Bubbles = {
+	GAP_MIN = 3 * 60,
+	GAP_MAX = 5 * 60,
+	LIFE = 16,
+	REWARD_TICKS = 6,
+	REWARD_MIN = 10,
+}
+
+-- ===== Декор аквариумов =====
+-- Картинки из art/src/decor.py (SpriteData), размер в пикселях фона (1 px фона = высота экрана / 240).
+-- x — центр по ширине экрана, y — линия дна (низ предмета), доли экрана.
+-- anim: "sway" — покачивается (растения), "glow" — мерцает, "vent" — пускает пузырьки.
+-- tap: "open" — открывается (sprite открытый в open), "wobble" — подпрыгивает. flip — зеркально.
+FishConfig.Decor = {
+	lagoon = {
+		{ id = "decor_kelp", x = 0.05, y = 0.81, anim = "sway" },
+		{ id = "decor_coral", x = 0.19, y = 0.80, anim = "sway" },
+		{ id = "decor_chest", x = 0.34, y = 0.805, tap = "open", open = "decor_chest_open" },
+		{ id = "decor_shell", x = 0.5, y = 0.80, tap = "open", open = "decor_shell_open" },
+		{ id = "decor_anemone", x = 0.63, y = 0.80, anim = "sway" },
+		{ id = "decor_starfish", x = 0.73, y = 0.805, tap = "wobble" },
+		{ id = "decor_shroomhouse", x = 0.86, y = 0.81, tap = "wobble" },
+		{ id = "decor_kelp", x = 0.97, y = 0.81, anim = "sway", flip = true },
+	},
+	volcano = {
+		{ id = "decor_vent", x = 0.1, y = 0.81, anim = "vent", tap = "wobble" },
+		{ id = "decor_firecoral", x = 0.27, y = 0.80, anim = "sway" },
+		{ id = "decor_obsidian", x = 0.5, y = 0.805 },
+		{ id = "decor_amphora", x = 0.72, y = 0.80, tap = "wobble" },
+		{ id = "decor_firecoral", x = 0.9, y = 0.81, anim = "sway", flip = true },
+	},
+	arctic = {
+		{ id = "decor_seagrass", x = 0.05, y = 0.81, anim = "sway" },
+		{ id = "decor_igloo", x = 0.24, y = 0.805, tap = "wobble" },
+		{ id = "decor_icecrystal", x = 0.52, y = 0.80, anim = "glow" },
+		{ id = "decor_anchor", x = 0.76, y = 0.805, tap = "wobble" },
+		{ id = "decor_seagrass", x = 0.95, y = 0.81, anim = "sway", flip = true },
+	},
+	abyss = {
+		{ id = "decor_tubeworm", x = 0.07, y = 0.81, anim = "sway" },
+		{ id = "decor_arch", x = 0.3, y = 0.81, anim = "glow" },
+		{ id = "decor_glowshroom", x = 0.58, y = 0.80, anim = "glow", tap = "wobble" },
+		{ id = "decor_wreck", x = 0.85, y = 0.81, tap = "wobble" },
+	},
+	haunted = {
+		{ id = "decor_deadtree", x = 0.09, y = 0.81 },
+		{ id = "decor_tombstone", x = 0.3, y = 0.80, tap = "wobble" },
+		{ id = "decor_lantern", x = 0.52, y = 0.80, anim = "glow", tap = "wobble" },
+		{ id = "decor_barrel", x = 0.74, y = 0.805, tap = "wobble" },
+		{ id = "decor_tombstone", x = 0.92, y = 0.81, flip = true, tap = "wobble" },
+	},
+}
+
 return FishConfig

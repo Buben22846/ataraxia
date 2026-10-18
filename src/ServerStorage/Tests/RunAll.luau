@@ -768,6 +768,39 @@ return function()
 		Leaderboards._setService(nil)
 	end
 
+	-- ===== Золотые пузырьки =====
+	do
+		local Bubbles = require(ServerScriptService.Bubbles)
+		local C = FishConfig.Bubbles
+		local T0 = 1_800_000_000
+		local rng = Random.new(1)
+		local st = Bubbles.newState(T0, rng)
+		check("пузырьки: первый не раньше GAP_MIN", st.nextAt >= T0 + C.GAP_MIN and st.nextAt <= T0 + C.GAP_MAX)
+		check("пузырьки: до срока не появляется", Bubbles.tick(st, T0 + 10, rng) == nil)
+		local id, life = Bubbles.tick(st, st.nextAt, rng)
+		check("пузырьки: появляется в срок", id == 1 and life == C.LIFE)
+		check("пузырьки: чужой id не принимается", Bubbles.claim(st, 2, T0 + C.GAP_MAX) == false)
+		local spawnAt = st.expires - C.LIFE
+		check("пузырьки: настоящий id — награда один раз", Bubbles.claim(st, id, spawnAt + 3) == true and Bubbles.claim(st, id, spawnAt + 4) == false)
+		local id2 = Bubbles.tick(st, st.nextAt, rng)
+		check("пузырьки: просроченный не принимается", id2 == 2 and Bubbles.claim(st, id2, st.expires + 3) == false)
+		check("пузырьки: награда не меньше минимума", Bubbles.reward(0) == C.REWARD_MIN and Bubbles.reward(100) == 100 * C.REWARD_TICKS)
+		-- декор: у каждого предмета есть картинка
+		local SpriteData = require(ReplicatedStorage.Shared.SpriteData)
+		local decorOk = true
+		for tankId, list in pairs(FishConfig.Decor) do
+			if FishConfig.Tanks[tankId] == nil then
+				decorOk = false
+			end
+			for _, d in ipairs(list) do
+				if SpriteData[d.id] == nil or (d.open ~= nil and SpriteData[d.open] == nil) then
+					decorOk = false
+				end
+			end
+		end
+		check("декор: картинки всех предметов есть в SpriteData", decorOk)
+	end
+
 	-- ===== Конфиг =====
 	for packId, pack in pairs(FishConfig.Packs) do
 		local sum = 0

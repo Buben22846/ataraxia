@@ -21,6 +21,7 @@ SPRITES = [
     "lantern_fish", "jellyfish", "anglerfish", "abyss_ray", "leviathan",
     "pumpkin_fish", "ghost_guppy", "bat_ray", "bone_fish", "jack_angler",  # ивент Хэллоуин
 ]
+DECOR = sorted(f[:-4] for f in os.listdir(PNG) if f.startswith("decor_") and f.endswith(".png"))  # art/src/decor.py
 BACKGROUNDS = ["bg_lagoon", "bg_volcano", "bg_arctic", "bg_abyss", "bg_haunted"]
 UI = ["ui_banner", "ui_banner_night", "ui_banner_hall", "ui_banner_quick", "ui_icon_night", "ui_icon_hall", "ui_icon_quick", "ui_coin", "ui_ticket", "ui_ticket_down", "ui_panel", "ui_row", "ui_btn", "ui_btn_down", "ui_btn_gold", "ui_btn_gold_down", "ui_btn_dark", "ui_btn_dark_down", "ui_btn_off"]  # art/src/ui_kit.py
 
@@ -64,8 +65,8 @@ def lua_entry(name):
 
 
 def main():
-    names = [n for n in SPRITES + BACKGROUNDS + UI if os.path.exists(os.path.join(PNG, n + ".png"))]
-    skipped = [n for n in SPRITES + BACKGROUNDS + UI if n not in names]
+    names = [n for n in SPRITES + BACKGROUNDS + UI + DECOR if os.path.exists(os.path.join(PNG, n + ".png"))]
+    skipped = [n for n in SPRITES + BACKGROUNDS + UI + DECOR if n not in names]
     parts = [
         "-- SpriteData: пиксель-арт игры (АВТОГЕНЕРАЦИЯ: art/build_spritedata.py, правьте картинки в art/src, а не этот файл).",
         "-- Формат строки: символ палитры + длина серии (\"a3.5b2\" = aaa.....bb), '.' — прозрачный пиксель.",

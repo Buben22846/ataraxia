@@ -309,6 +309,7 @@ local discovered = {} -- id вида -> true (собранные виды, пр�
 local CurrentUi = { state = nil, receivedAt = 0 } -- течения и мутации от сервера (см. блок «Течения» ниже)
 local Hints = { noCoins = function() return false end, offline = function(gained, capped) end }
 local LeaderboardUi = { open = function() end } -- окно таблиц лидеров (настоящую функцию задаёт блок ниже)
+local DecorUi = { show = function(tankId) end, build = function(parent, tankId, z) return function() end end } -- декор (блок ниже)
 local setsState = {} -- наборы коллекции от сервера: { [tankId] = { bonus, tiers = { {have, need, done, bonus}, ... } } }
 local revealBusy = false -- идёт анимация открытия пака
 local pendingReveals = {} -- очередь результатов, если они пришли во время анимации
@@ -1905,6 +1906,7 @@ local function switchTank(id)
 	selectedId = nil
 	TweenService:Create(tank, TweenInfo.new(0.6), { BackgroundColor3 = FishConfig.Tanks[id].color }):Play()
 	applyBackground(id)
+	pcall(DecorUi.show, id)
 	for _, fish in pairs(fishById) do
 		fish.label.Visible = fish.data.tank == currentTank
 	end
@@ -3586,6 +3588,10 @@ do
 					viewBg.Visible = def.background ~= nil and Sprites.apply(viewBg, def.background, false)
 				end
 				clearFish()
+				if visit.clearDecor ~= nil then
+					visit.clearDecor()
+				end
+				visit.clearDecor = DecorUi.build(view, v.tank, 7)
 				local token = visit.token
 				for _, data in ipairs(v.fish or {}) do
 					spawnFish(data, token)
@@ -3613,6 +3619,10 @@ do
 			view.Visible = false
 			visit.view = nil
 			clearFish()
+			if visit.clearDecor ~= nil then
+				visit.clearDecor()
+				visit.clearDecor = nil
+			end
 		end
 
 		feedButton.Activated:Connect(function()
@@ -3870,48 +3880,362 @@ tutorialDoneEvent.OnClientEvent:Connect(safely("TutorialDone", function(done)
 	end
 end))
 
--- ===== Пузырьки (лёгкая атмосфера позади рыб, остаются при смене аквариума) =====
-local BUBBLE_COUNT = 12
-
-local function startBubbles()
+-- ===== Декор, пузырьки и золотые пузырьки =====
+-- Декор (растения, домики, сундуки) стоит на дне аквариума за рыбами; растения качаются, кристаллы мерцают,
+-- жерло пускает пузырьки. На сундук, ракушку, домик и т.п. можно нажать. Обычные пузырьки лопаются от нажатия,
+-- а золотой пузырёк (его выпускает сервер раз в несколько минут) приносит монеты.
+do
+	local SpriteData = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("SpriteData"))
 	local rng = Random.new()
+
+	-- Звук «пуф»: тот же щелчок, но выше и с разной высотой, чтобы не надоедал
+	local popSound = make("Sound", { Name = "Sfx_pop", SoundId = "rbxasset://sounds/clickfast.wav", Volume = 0.25 }, gui)
+	local function playPop(pitch)
+		if not Sfx.enabled then
+			return
+		end
+		pcall(function()
+			popSound.PlaybackSpeed = pitch or (1.4 + rng:NextNumber() * 0.5)
+			popSound.TimePosition = 0
+			popSound:Play()
+		end)
+	end
+
+	-- Пиксель декора = высота экрана / 240 (как у фона)
+	local function unit(frame)
+		local h = frame.AbsoluteSize.Y
+		if h < 50 then
+			h = 800
+		end
+		return h / 240
+	end
+
+	-- Пузырёк, который поднимается от точки и исчезает (для жерла, сундука и т.п.)
+	local function puff(parent, x, y, count, color, z)
+		for i = 1, count do
+			local size = 0.012 + rng:NextNumber() * 0.018
+			local b = make("Frame", {
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(x + (rng:NextNumber() - 0.5) * 0.03, y),
+				Size = UDim2.fromScale(size, size),
+				BackgroundColor3 = color or WHITE,
+				BackgroundTransparency = 0.55,
+				BorderSizePixel = 0,
+				ZIndex = z or 2,
+			}, parent)
+			make("UIAspectRatioConstraint", { AspectRatio = 1, DominantAxis = Enum.DominantAxis.Width }, b)
+			make("UICorner", { CornerRadius = UDim.new(0.5, 0) }, b)
+			make("UIStroke", { Color = WHITE, Transparency = 0.4, Thickness = 1 }, b)
+			local rise = 0.12 + rng:NextNumber() * 0.14
+			local time = 1.6 + rng:NextNumber() * 1.2
+			task.delay((i - 1) * 0.12, function()
+				local tween = TweenService:Create(b, TweenInfo.new(time, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
+					Position = UDim2.fromScale(x + (rng:NextNumber() - 0.5) * 0.06, y - rise),
+					BackgroundTransparency = 1,
+				})
+				tween:Play()
+				tween.Completed:Wait()
+				b:Destroy()
+			end)
+		end
+	end
+
+	-- ----- Декор -----
+	-- Строит декор аквариума tankId внутри parent. interactive = false — без нажатий (в гостях).
+	-- Возвращает функцию очистки.
+	local function buildDecor(parent, tankId, interactive, z)
+		z = z or 2
+		local list = FishConfig.Decor and FishConfig.Decor[tankId]
+		local alive = true
+		local items = {}
+		local layer = make("Frame", {
+			Name = "Decor",
+			Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = 1,
+			ZIndex = z,
+		}, parent)
+
+		local function resize()
+			local u = unit(parent)
+			for _, it in ipairs(items) do
+				it.holder.Size = UDim2.fromOffset(it.w * u, it.h * u * 2)
+			end
+		end
+
+		for index, d in ipairs(list or {}) do
+			local data = SpriteData[d.id]
+			if data ~= nil then
+				-- holder вдвое выше картинки, центр holder — низ картинки: поворот идёт вокруг «корня»
+				local holder = make("Frame", {
+					Name = d.id,
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					Position = UDim2.fromScale(d.x, d.y),
+					BackgroundTransparency = 1,
+					ZIndex = z,
+				}, layer)
+				local className = if interactive and d.tap ~= nil then "ImageButton" else "ImageLabel"
+				local image = Instance.new(className)
+				image.Name = "Image"
+				image.Size = UDim2.fromScale(1, 0.5)
+				image.BackgroundTransparency = 1
+				image.ScaleType = Enum.ScaleType.Stretch
+				image.ZIndex = z
+				if className == "ImageButton" then
+					image.AutoButtonColor = false
+				end
+				if not Sprites.apply(image, d.id, d.flip == true) then
+					image:Destroy()
+					holder:Destroy()
+					continue
+				end
+				local scale = Instance.new("UIScale")
+				scale.Parent = image
+				image.Parent = holder
+				local it = { holder = holder, image = image, scale = scale, w = data.w, h = data.h, def = d, opened = false }
+				table.insert(items, it)
+
+				-- анимации
+				if d.anim == "sway" then
+					local angle = 2 + rng:NextNumber() * 2
+					holder.Rotation = -angle
+					task.delay(rng:NextNumber() * 2, function()
+						if alive then
+							TweenService:Create(holder, TweenInfo.new(2.4 + rng:NextNumber() * 1.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Rotation = angle }):Play()
+						end
+					end)
+				elseif d.anim == "glow" then
+					image.ImageColor3 = Color3.fromRGB(175, 180, 200)
+					TweenService:Create(image, TweenInfo.new(1.8 + rng:NextNumber(), Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { ImageColor3 = WHITE }):Play()
+				elseif d.anim == "vent" then
+					task.spawn(function()
+						while alive and holder.Parent ~= nil do
+							task.wait(2.5 + rng:NextNumber() * 3)
+							if alive and parent.Visible ~= false then
+								local u = unit(parent)
+								local topY = d.y - (data.h * u) / math.max(parent.AbsoluteSize.Y, 1)
+								puff(layer, d.x, topY, 3, nil, z)
+							end
+						end
+					end)
+				end
+
+				-- нажатия
+				if className == "ImageButton" then
+					image.Activated:Connect(function()
+						local u = unit(parent)
+						local topY = d.y - (data.h * u) / math.max(parent.AbsoluteSize.Y, 1)
+						if d.tap == "open" then
+							if it.opened then
+								return
+							end
+							it.opened = true
+							Sprites.apply(image, d.open, d.flip == true)
+							playPop(1.1)
+							puff(layer, d.x, topY + 0.02, 6, Color3.fromRGB(255, 236, 140))
+							task.delay(3.5, function()
+								if alive and image.Parent ~= nil then
+									Sprites.apply(image, d.id, d.flip == true)
+									it.opened = false
+								end
+							end)
+						else
+							playPop()
+							scale.Scale = 1
+							local up = TweenService:Create(scale, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Scale = 1.12 })
+							up:Play()
+							up.Completed:Once(function()
+								TweenService:Create(scale, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+							end)
+							puff(layer, d.x, topY + 0.01, 3)
+						end
+					end)
+				end
+			end
+		end
+		resize()
+		local conn = parent:GetPropertyChangedSignal("AbsoluteSize"):Connect(resize)
+		return function()
+			alive = false
+			conn:Disconnect()
+			layer:Destroy()
+		end
+	end
+
+	-- свой аквариум: декор меняется вместе с аквариумом
+	local clearOwn = nil
+	local shownTank = nil
+	function DecorUi.show(tankId)
+		if tankId == shownTank then
+			return
+		end
+		shownTank = tankId
+		if clearOwn ~= nil then
+			clearOwn()
+		end
+		clearOwn = buildDecor(tank, tankId, true, 1) -- слой фона: рыбы (2) всегда поверх
+	end
+	DecorUi.build = function(parent, tankId, z)
+		return buildDecor(parent, tankId, false, z)
+	end
+	pcall(DecorUi.show, currentTank)
+
+	-- ----- Обычные пузырьки: поднимаются позади рыб, лопаются от нажатия -----
+	local BUBBLE_COUNT = 12
 	for index = 1, BUBBLE_COUNT do
 		local size = 0.014 + rng:NextNumber() * 0.034 -- доля ширины экрана
-		local bubble = make("Frame", {
+		local bubble = make("TextButton", {
 			Name = "Bubble" .. index,
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Size = UDim2.fromScale(size, size),
 			BackgroundColor3 = WHITE,
 			BackgroundTransparency = 0.8,
 			BorderSizePixel = 0,
-			Active = false,
+			AutoButtonColor = false,
+			Text = "",
+			NoSfx = true,
 			ZIndex = 1,
 		}, tank)
 		make("UIAspectRatioConstraint", { AspectRatio = 1, DominantAxis = Enum.DominantAxis.Width }, bubble)
 		make("UICorner", { CornerRadius = UDim.new(0.5, 0) }, bubble)
-		make("UIStroke", { Color = WHITE, Transparency = 0.5, Thickness = 1.5 }, bubble)
+		local stroke = make("UIStroke", { Color = WHITE, Transparency = 0.5, Thickness = 1.5 }, bubble)
+		local bubbleScale = make("UIScale", { Scale = 1 }, bubble)
+		local speed = 0.03 + rng:NextNumber() * 0.05 -- экранов в секунду
+		local current = nil -- текущий твин подъёма
+		local popped = false
 
-		local speed = 0.03 + rng:NextNumber() * 0.05 -- экранов в секунду: чем больше пузырь, тем он может быть и медленнее
+		bubble.Activated:Connect(function()
+			if popped then
+				return
+			end
+			popped = true
+			if current then
+				current:Cancel()
+			end
+			playPop()
+			TweenService:Create(bubbleScale, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Scale = 1.8 }):Play()
+			TweenService:Create(bubble, TweenInfo.new(0.15), { BackgroundTransparency = 1 }):Play()
+			TweenService:Create(stroke, TweenInfo.new(0.15), { Transparency = 1 }):Play()
+		end)
+
 		task.spawn(function()
 			local fromY = 0.15 + rng:NextNumber() * 0.9 -- первый подъём начинается где угодно
 			while bubble.Parent ~= nil do
 				local x = 0.04 + rng:NextNumber() * 0.92
 				local drift = (rng:NextNumber() - 0.5) * 0.12
 				bubble.Position = UDim2.fromScale(x, fromY)
-				local tween = TweenService:Create(
+				current = TweenService:Create(
 					bubble,
 					TweenInfo.new((fromY + 0.05) / speed, Enum.EasingStyle.Linear),
 					{ Position = UDim2.fromScale(math.clamp(x + drift, 0.02, 0.98), -0.05) }
 				)
-				tween:Play()
-				tween.Completed:Wait()
-				task.wait(rng:NextNumber() * 3)
+				current:Play()
+				current.Completed:Wait()
+				task.wait(if popped then 1 + rng:NextNumber() * 3 else rng:NextNumber() * 3)
+				-- новый пузырёк снизу
+				popped = false
+				bubbleScale.Scale = 1
+				bubble.BackgroundTransparency = 0.8
+				stroke.Transparency = 0.5
 				fromY = 1.05
 			end
 		end)
 	end
+
+	-- ----- Золотой пузырёк (выпускает сервер) -----
+	local goldEvent = remotes:WaitForChild("GoldBubble", 10)
+	local popEvent = remotes:WaitForChild("PopBubble", 10)
+	if goldEvent ~= nil and popEvent ~= nil then
+		local GOLD = Color3.fromRGB(255, 202, 40)
+		local lastPos = UDim2.fromScale(0.5, 0.5)
+		local function spawnGold(id, life)
+			local x = 0.15 + rng:NextNumber() * 0.7
+			local bubble = make("TextButton", {
+				Name = "GoldBubble",
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(x, 0.82),
+				Size = UDim2.fromScale(0.11, 0.11),
+				BackgroundColor3 = GOLD,
+				BackgroundTransparency = 0.35,
+				BorderSizePixel = 0,
+				AutoButtonColor = false,
+				Text = "✨",
+				TextScaled = true,
+				MinText = 10,
+				MaxText = 30,
+				TextColor3 = WHITE,
+				NoSfx = true,
+				ZIndex = 3, -- над рыбами, чтобы точно можно было нажать
+			}, tank)
+			make("UIAspectRatioConstraint", { AspectRatio = 1, DominantAxis = Enum.DominantAxis.Width }, bubble)
+			make("UICorner", { CornerRadius = UDim.new(0.5, 0) }, bubble)
+			make("UIStroke", { Color = Color3.fromRGB(255, 244, 180), Thickness = 2.5 }, bubble)
+			local bubbleScale = make("UIScale", { Scale = 1 }, bubble)
+			TweenService:Create(bubbleScale, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.12 }):Play()
+			local rise = TweenService:Create(bubble, TweenInfo.new(life, Enum.EasingStyle.Linear), { Position = UDim2.fromScale(math.clamp(x + (rng:NextNumber() - 0.5) * 0.2, 0.1, 0.9), 0.22) })
+			rise:Play()
+			local done = false
+			bubble.Activated:Connect(function()
+				if done then
+					return
+				end
+				done = true
+				rise:Cancel()
+				lastPos = bubble.Position
+				popEvent:FireServer(id)
+				playPop(1.0)
+				puff(tank, bubble.Position.X.Scale, bubble.Position.Y.Scale, 6, GOLD)
+				bubble:Destroy()
+			end)
+			rise.Completed:Connect(function()
+				if not done then
+					done = true
+					TweenService:Create(bubble, TweenInfo.new(0.5), { BackgroundTransparency = 1, TextTransparency = 1 }):Play()
+					task.delay(0.6, function()
+						bubble:Destroy()
+					end)
+				end
+			end)
+		end
+
+		-- «+N» всплывает над местом, где лопнул пузырёк
+		local function floatText(text)
+			local label = make("TextLabel", {
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = lastPos,
+				Size = UDim2.fromScale(0.4, 0.05),
+				BackgroundTransparency = 1,
+				Text = text,
+				TextScaled = true,
+				MinText = 12,
+				MaxText = 30,
+				TextColor3 = GOLD,
+				TextStrokeTransparency = 0.3,
+				Font = FONT,
+				ZIndex = 4,
+			}, tank)
+			local tween = TweenService:Create(label, TweenInfo.new(1.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				Position = lastPos - UDim2.fromScale(0, 0.1),
+				TextTransparency = 1,
+				TextStrokeTransparency = 1,
+			})
+			tween:Play()
+			tween.Completed:Wait()
+			label:Destroy()
+		end
+
+		goldEvent.OnClientEvent:Connect(function(message)
+			if typeof(message) ~= "table" then
+				return
+			end
+			if typeof(message.id) == "number" then
+				spawnGold(message.id, math.clamp(tonumber(message.life) or 15, 5, 30))
+			elseif message.coins ~= nil then
+				Sfx.play("reward")
+				task.spawn(floatText, "+" .. Strings.num(message.coins) .. " 🪙")
+			end
+		end)
+	end
 end
-pcall(startBubbles)
 
 -- ===== Панель администратора (видна только админам; права всё равно проверяет сервер) =====
 local adminBuilt = false

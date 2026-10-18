@@ -109,6 +109,12 @@
         },
         "LeaderboardState": {
           "$className": "RemoteEvent"
+        },
+        "GoldBubble": {
+          "$className": "RemoteEvent"
+        },
+        "PopBubble": {
+          "$className": "RemoteEvent"
         }
       }
     },
@@ -135,6 +141,9 @@
       },
       "Events": {
         "$path": "src/ServerScriptService/Events.luau"
+      },
+      "Bubbles": {
+        "$path": "src/ServerScriptService/Bubbles.luau"
       },
       "Tide": {
         "$path": "src/ServerScriptService/Tide.luau"
