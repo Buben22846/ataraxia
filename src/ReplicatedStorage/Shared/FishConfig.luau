@@ -157,8 +157,8 @@ FishConfig.VariantOrder = { "normal", "golden", "rainbow" }
 -- Пока passId / productId = 0, соответствующий товар не продаётся и не показывается.
 FishConfig.Shop = {
 	DoubleCoins = { passId = 2040116972, mult = 2 }, -- Poseidon's Blessing
-	NightWatch = { passId = 0, offlineMax = 12 * 3600 }, -- Night Watchman
-	SecondHall = { passId = 0, extraQueue = 3 }, -- Second Hall
+	NightWatch = { passId = 2037201398, offlineMax = 12 * 3600 }, -- Night Watchman
+	SecondHall = { passId = 2039841310, extraQueue = 3 }, -- Second Hall
 	QuickOpen = { passId = 2037243513, packs = 3 }, -- Quick Open
 	StarterPack = {
 		key = "starter",
