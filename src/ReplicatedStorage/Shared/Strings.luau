@@ -177,6 +177,28 @@ end
 
 -- ===== Тексты интерфейса =====
 -- Формулировки подобраны так, чтобы подставляемые названия не требовали склонения.
+-- Названия предметов декора
+local DECOR_RU = {
+	decor_kelp = "Ламинария", decor_coral = "Коралл", decor_chest = "Сундук", decor_shell = "Жемчужная раковина",
+	decor_anemone = "Актиния", decor_starfish = "Морская звезда", decor_shroomhouse = "Грибной домик",
+	decor_vent = "Горячий источник", decor_firecoral = "Огненный коралл", decor_obsidian = "Обсидиан", decor_amphora = "Амфора",
+	decor_seagrass = "Морская трава", decor_igloo = "Иглу", decor_icecrystal = "Ледяной кристалл", decor_anchor = "Якорь",
+	decor_tubeworm = "Трубчатые черви", decor_arch = "Светящаяся арка", decor_glowshroom = "Светящийся гриб", decor_wreck = "Затонувший корабль",
+	decor_deadtree = "Мёртвое дерево", decor_tombstone = "Надгробие", decor_lantern = "Фонарь", decor_barrel = "Бочка",
+}
+local DECOR_EN = {
+	decor_kelp = "Kelp", decor_coral = "Coral", decor_chest = "Treasure Chest", decor_shell = "Pearl Shell",
+	decor_anemone = "Anemone", decor_starfish = "Starfish", decor_shroomhouse = "Mushroom House",
+	decor_vent = "Hot Vent", decor_firecoral = "Fire Coral", decor_obsidian = "Obsidian", decor_amphora = "Amphora",
+	decor_seagrass = "Seagrass", decor_igloo = "Igloo", decor_icecrystal = "Ice Crystal", decor_anchor = "Anchor",
+	decor_tubeworm = "Tube Worms", decor_arch = "Glowing Arch", decor_glowshroom = "Glow Mushroom", decor_wreck = "Shipwreck",
+	decor_deadtree = "Dead Tree", decor_tombstone = "Tombstone", decor_lantern = "Lantern", decor_barrel = "Barrel",
+}
+function Strings.decor(id)
+	local table_ = if language == "en" then DECOR_EN else DECOR_RU
+	return table_[id] or DECOR_EN[id] or tostring(id)
+end
+
 local TEXT = {
 	ru = {
 		-- Главный экран
@@ -189,10 +211,10 @@ local TEXT = {
 		event_left_d = "%dд %dч",
 		event_left_h = "%dч %dм",
 		event_welcome = "%s %s! Открыт аквариум «%s», в подарок конфеты 🍬",
-		odds = "Шансы",
-		collection = "Коллекция %s/%s",
+		odds = "❓ Шансы",
+		collection = "📖 Индекс %s/%s",
 		slots_max = "Мест: максимум",
-		slot_buy = "+место (%s)",
+		slot_buy = "➕ Место (%s)",
 		close = "Закрыть",
 
 		-- Уведомления
@@ -360,6 +382,21 @@ local TEXT = {
 
 		-- Панель администратора
 		adm_title = "Админ-панель (тест)",
+		btn_daily = "Награда",
+		btn_sound = "Звук",
+		btn_shop = "Магазин",
+		btn_guests = "Гости",
+		decor_tag = "🔒 %s",
+		decor_bonus = "+%s%% к доходу этого аквариума",
+		decor_buy = "Купить за %s",
+		decor_cancel = "Не сейчас",
+		decor_bought = "✨ Куплено: %s! +%s%% к доходу",
+		decor_need = "Не хватает монет: нужно %s",
+		decor_row = "🪴 Декор %s/%s · нажмите на тёмный предмет в аквариуме",
+		decor_row_bonus = "+%s%%",
+		feed_hint = "Нажмите на воду — бросить корм",
+		feed_cooldown = "Рыбы ещё сыты",
+		pet_heart = "💗",
 		adm_coins_1k = "+1 000 монет",
 		adm_coins_100k = "+100 000 монет",
 		adm_slot = "+1 место в аквариуме",
@@ -381,10 +418,10 @@ local TEXT = {
 		event_left_d = "%dd %dh",
 		event_left_h = "%dh %dm",
 		event_welcome = "%s %s! The %s tank is open, and here is some candy 🍬",
-		odds = "Odds",
-		collection = "Collection %s/%s",
+		odds = "❓ Odds",
+		collection = "📖 Index %s/%s",
 		slots_max = "Slots: max",
-		slot_buy = "+slot (%s)",
+		slot_buy = "➕ Slot (%s)",
 		close = "Close",
 
 		toast_full = "Tank is full: sell a fish or buy a slot",
@@ -542,6 +579,21 @@ local TEXT = {
 		sound_toggle = "Sound",
 
 		adm_title = "Admin panel (test)",
+		btn_daily = "Reward",
+		btn_sound = "Sound",
+		btn_shop = "Shop",
+		btn_guests = "Guests",
+		decor_tag = "🔒 %s",
+		decor_bonus = "+%s%% income in this tank",
+		decor_buy = "Buy for %s",
+		decor_cancel = "Not now",
+		decor_bought = "✨ Bought: %s! +%s%% income",
+		decor_need = "Not enough coins: need %s",
+		decor_row = "🪴 Decor %s/%s · tap a dark item in the tank",
+		decor_row_bonus = "+%s%%",
+		feed_hint = "Tap the water to drop food",
+		feed_cooldown = "The fish are still full",
+		pet_heart = "💗",
 		adm_coins_1k = "+1,000 coins",
 		adm_coins_100k = "+100,000 coins",
 		adm_slot = "+1 tank slot",

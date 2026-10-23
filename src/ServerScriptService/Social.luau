@@ -166,6 +166,7 @@ function Social.view(guest, owner, ownerId, tankId, now)
 		tanks = tanks,
 		tank = tankId,
 		fish = fish,
+		decor = owner.decor or {},
 		likes = os_.likes,
 		boostLeft = math.max(0, os_.boostUntil - now),
 		feedLeft = Social.feedLeft(guest, ownerId, now),

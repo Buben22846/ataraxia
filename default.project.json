@@ -115,6 +115,12 @@
         },
         "PopBubble": {
           "$className": "RemoteEvent"
+        },
+        "BuyDecor": {
+          "$className": "RemoteEvent"
+        },
+        "DecorState": {
+          "$className": "RemoteEvent"
         }
       }
     },
@@ -141,6 +147,9 @@
       },
       "Events": {
         "$path": "src/ServerScriptService/Events.luau"
+      },
+      "Decor": {
+        "$path": "src/ServerScriptService/Decor.luau"
       },
       "Bubbles": {
         "$path": "src/ServerScriptService/Bubbles.luau"

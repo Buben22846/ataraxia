@@ -89,6 +89,7 @@ local function newProfile()
 		events = {}, -- { [id ивента] = { candy, welcomed, online } }
 		social = {}, -- гости: лайки, бонус кормления, кого кормил и лайкал (см. Social)
 		weekly = { week = 0, orders = 0 }, -- заказы музея за неделю (таблица лидеров)
+		decor = {}, -- купленное наполнение аквариумов: { [key] = true } (см. Decor)
 	}
 end
 

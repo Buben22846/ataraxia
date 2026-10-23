@@ -799,6 +799,33 @@ return function()
 			end
 		end
 		check("декор: картинки всех предметов есть в SpriteData", decorOk)
+
+		-- купленное наполнение: цена, бонус к доходу своего аквариума
+		local Decor = require(ServerScriptService.Decor)
+		local PlayerData = require(ServerScriptService.PlayerData)
+		local Economy = require(ServerScriptService.Economy)
+		local dp = PlayerData._newProfile()
+		dp.coins = 100000
+		local chest = FishConfig.DecorItems.lagoon_chest
+		check("декор: ключи и цены есть в конфиге", chest ~= nil and chest.price > 0 and chest.bonus > 0 and chest.tank == "lagoon")
+		check("декор: без покупок бонуса нет", Decor.bonus(dp, "lagoon") == 0)
+		check("декор: неизвестный ключ не покупается", select(2, Decor.buy(dp, "nope")) == "unknown")
+		local okBuy = Decor.buy(dp, "lagoon_chest")
+		check("декор: покупка списывает цену", okBuy == true and dp.coins == 100000 - chest.price)
+		check("декор: повторная покупка отклонена", select(2, Decor.buy(dp, "lagoon_chest")) == "owned" and dp.coins == 100000 - chest.price)
+		check("декор: бонус аквариума равен бонусу предмета", math.abs(Decor.bonus(dp, "lagoon") - chest.bonus) < 1e-9)
+		check("декор: бонус не действует на другой аквариум", Decor.bonus(dp, "volcano") == 0)
+		check("декор: аквариума нет — не покупается", select(2, Decor.buy(dp, "volcano_vent")) == "tank")
+		dp.coins = 0
+		check("декор: не хватает монет", select(2, Decor.buy(dp, "lagoon_coral")) == "coins")
+		local before = Economy.incomePerTick(dp, 1_800_000_000)
+		dp.tanks.lagoon.fish = { { id = 1, species = "guppy", variant = "normal", born = 1_800_000_000 - 100000, earned = 0 } }
+		local withDecor = Economy.incomePerTick(dp, 1_800_000_000)
+		dp.decor = {}
+		local withoutDecor = Economy.incomePerTick(dp, 1_800_000_000)
+		check("декор: доход с бонусом не меньше дохода без него", withDecor >= withoutDecor and before == 0)
+		local ds = Decor.state(dp)
+		check("декор: состояние для клиента без купленного пустое", next(ds.owned) == nil and ds.bonus.lagoon == 0)
 	end
 
 	-- ===== Конфиг =====

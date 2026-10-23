@@ -307,9 +307,9 @@ local discovered = {} -- id вида -> true (собранные виды, пр�
 -- Подсказки (ожидание монет, полная офлайн-копилка): реальный код задаёт блок магазина ниже, пока это заглушки.
 -- noCoins() возвращает true, если сам показал подсказку и обычное сообщение не нужно.
 local CurrentUi = { state = nil, receivedAt = 0 } -- течения и мутации от сервера (см. блок «Течения» ниже)
-local Hints = { noCoins = function() return false end, offline = function(gained, capped) end }
+local Hints = { noCoins = function() return false end, offline = function(gained, capped) end, heart = function(label) end, eat = function(fish, feeding) end }
 local LeaderboardUi = { open = function() end } -- окно таблиц лидеров (настоящую функцию задаёт блок ниже)
-local DecorUi = { show = function(tankId) end, build = function(parent, tankId, z) return function() end end } -- декор (блок ниже)
+local DecorUi = { show = function(tankId) end, build = function(parent, tankId, z, owned) return function() end end, refresh = function() end, ask = function(key) end, data = { owned = {}, bonus = {} } } -- data: купленное наполнение от сервера (owned[key] = true, bonus[tankId] = прибавка к доходу) -- декор (блок ниже)
 local setsState = {} -- наборы коллекции от сервера: { [tankId] = { bonus, tiers = { {have, need, done, bonus}, ... } } }
 local revealBusy = false -- идёт анимация открытия пака
 local pendingReveals = {} -- очередь результатов, если они пришли во время анимации
@@ -319,38 +319,42 @@ local Tutorial = { active = false, resolved = false, finished = false, sent = fa
 local Daily = { state = nil, syncedAt = 0, autoShown = false, pending = false, refetched = false }
 
 -- ===== Верхняя строка: монеты, счётчик рыб, подарок, звук =====
-local function iconButton(name, text, posX)
+-- Кнопка в верхней строке: значок и слово под ним («🛒 / Магазин»), чтобы было понятно без догадок
+local function iconButton(name, text, posX, caption)
 	local button = make("TextButton", {
 		Name = name,
 		Position = UDim2.fromScale(posX, TOP_Y),
-		Size = UDim2.fromScale(0.1, TOP_H),
+		Size = UDim2.fromScale(0.15, TOP_H),
 		BackgroundColor3 = COLOR_PANEL,
 		BorderSizePixel = 0,
-		Text = text,
+		Text = if caption ~= nil then (text .. "\n" .. caption) else text,
 		TextScaled = true,
-		MinText = 14,
+		TextWrapped = true,
+		MinText = 9,
 		MaxText = 30,
 		TextColor3 = WHITE,
 		Font = FONT,
 		ZIndex = 3,
 	}, gui)
-	make("UIAspectRatioConstraint", { AspectRatio = 1, DominantAxis = Enum.DominantAxis.Height }, button)
 	make("UICorner", { CornerRadius = UDim.new(0.25, 0) }, button)
 	return button
 end
 
 coinsLabel.Position = UDim2.fromScale(0.02, TOP_Y)
-coinsLabel.Size = UDim2.fromScale(0.34, TOP_H)
+coinsLabel.Size = UDim2.fromScale(0.28, TOP_H)
 coinsLabel.Text = T("coins", 0)
-make("UITextSizeConstraint", { MinTextSize = 12, MaxTextSize = 28 }, coinsLabel)
+-- Текст денег сам уменьшается под ширину (раньше большие числа вылезали за край экрана)
+coinsLabel.TextScaled = true
+coinsLabel.TextWrapped = false
+make("UITextSizeConstraint", { MinTextSize = 8, MaxTextSize = 28 }, coinsLabel)
 make("UICorner", { CornerRadius = UDim.new(0.25, 0) }, coinsLabel)
 UIKit.label(coinsLabel, 0.72) -- справа от иконки монеты
 UIKit.icon(coinsLabel, "ui_coin", 0.05)
 
 local fishCountLabel = make("TextLabel", {
 	Name = "FishCountLabel",
-	Position = UDim2.fromScale(0.37, TOP_Y),
-	Size = UDim2.fromScale(0.18, TOP_H),
+	Position = UDim2.fromScale(0.31, TOP_Y),
+	Size = UDim2.fromScale(0.17, TOP_H),
 	BackgroundColor3 = COLOR_PANEL,
 	BorderSizePixel = 0,
 	Text = "",
@@ -363,7 +367,7 @@ local fishCountLabel = make("TextLabel", {
 make("UICorner", { CornerRadius = UDim.new(0.25, 0) }, fishCountLabel)
 UIKit.label(fishCountLabel)
 
-local giftButton = iconButton("DailyButton", "🎁", 0.57)
+local giftButton = iconButton("DailyButton", "🎁", 0.5, T("btn_daily"))
 local giftDot = make("Frame", {
 	Name = "RedDot",
 	AnchorPoint = Vector2.new(0.5, 0.5),
@@ -377,13 +381,15 @@ local giftDot = make("Frame", {
 make("UICorner", { CornerRadius = UDim.new(0.5, 0) }, giftDot)
 make("UIStroke", { Color = WHITE, Thickness = 1.5 }, giftDot)
 
-local soundButton = iconButton("SoundButton", "🎧", 0.88) -- открывает настройки звука (см. блок «Настройки» ниже)
+local soundButton = iconButton("SoundButton", "🎧", 0.83, T("btn_sound")) -- открывает настройки звука (см. блок «Настройки» ниже)
 
 -- ===== Монеты и покупка пака =====
 buyButton.AnchorPoint = Vector2.new(0.5, 1)
 buyButton.Position = UDim2.fromScale(0.5, 0.985)
 buyButton.Size = UDim2.fromScale(0.96, 0.095)
-make("UITextSizeConstraint", { MinTextSize = 14, MaxTextSize = 34 }, buyButton)
+buyButton.TextScaled = true
+buyButton.TextWrapped = false
+make("UITextSizeConstraint", { MinTextSize = 8, MaxTextSize = 34 }, buyButton)
 make("UICorner", { CornerRadius = UDim.new(0.2, 0) }, buyButton)
 -- Кнопка паков — «цирковой билет», который пульсирует и привлекает внимание.
 -- Создана в Studio, а не через make(), поэтому скин вешаем вручную.
@@ -647,7 +653,7 @@ end
 -- Строка списка: слева текст, справа текст
 local function addRow(list, order, leftText, rightText, color)
 	local row = make("Frame", {
-		Size = UDim2.fromScale(1, 0.15),
+		Size = if list:IsA("ScrollingFrame") then ListKit.rowSize(list, 0.15) else UDim2.fromScale(1, 0.15),
 		BackgroundColor3 = COLOR_ROW,
 		BorderSizePixel = 0,
 		LayoutOrder = order,
@@ -682,6 +688,7 @@ end
 
 -- ===== Коллекция =====
 local collectionPanel = makePanel("CollectionPanel")
+ListKit.scroll(collectionPanel) -- индекс рыб листается (раньше лишние строки уходили за край окна)
 addHint(collectionPanel, T("coll_hint"))
 
 local function discoveredCount()
@@ -730,6 +737,25 @@ local function refreshCollection()
 		else
 			addRow(collectionPanel.list, index, T("unknown_fish"), "—", COLOR_MUTED)
 		end
+	end
+
+	-- Декор: сколько предметов куплено и какая от них прибавка
+	local decorKeys = FishConfig.DecorKeys[currentTank]
+	if decorKeys ~= nil and #decorKeys > 0 then
+		local have = 0
+		for _, key in ipairs(decorKeys) do
+			if DecorUi.data.owned[key] then
+				have += 1
+			end
+		end
+		local decorPercent = math.floor((DecorUi.data.bonus[currentTank] or 0) * 100 + 0.5)
+		addRow(
+			collectionPanel.list,
+			98,
+			T("decor_row", have, #decorKeys),
+			T("decor_row_bonus", decorPercent),
+			if decorPercent > 0 then COLOR_GOLD else COLOR_MUTED
+		)
 	end
 
 	-- Итоговая строка: прогресс набора (все виды / золотые / радужные) и прибавка к доходу этого аквариума
@@ -1698,7 +1724,9 @@ end
 -- Жизнь одной рыбы: выбрать точку -> доплыть -> пауза -> повторить
 local function swim(fish)
 	while fish.alive do
-		local target = randomPoint()
+		local feeding = fish.feedTarget -- { pos, pellet }: рыба плывёт к корму, который бросил игрок
+		fish.feedTarget = nil
+		local target = if feeding ~= nil then feeding.pos else randomPoint()
 		local from = fish.label.Position
 		local dx = target.X.Scale - from.X.Scale
 		local dy = target.Y.Scale - from.Y.Scale
@@ -1726,7 +1754,12 @@ local function swim(fish)
 		if not fish.alive then
 			break
 		end
-		task.wait(math.random() * 1.5)
+		if feeding ~= nil and tween.PlaybackState == Enum.PlaybackState.Completed then
+			Hints.eat(fish, feeding) -- съела: сердечко, корм исчезает
+		end
+		if fish.feedTarget == nil then
+			task.wait(math.random() * 1.5)
+		end
 	end
 end
 
@@ -1809,6 +1842,7 @@ local function addFish(fishData)
 	end
 
 	label.Activated:Connect(function()
+		pcall(Hints.heart, label) -- рыбка радуется нажатию
 		selectFish(fishData.id)
 	end)
 
@@ -1826,6 +1860,130 @@ local function removeFish(id)
 	end
 	fish.label:Destroy()
 	fishById[id] = nil
+end
+
+-- ===== Покормить рыб: нажмите на воду — упадёт корм, ближайшая рыба приплывёт и съест =====
+do
+	local feedZone = make("TextButton", {
+		Name = "FeedZone",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		AutoButtonColor = false,
+		Text = "",
+		ZIndex = 1, -- под рыбами, декором и пузырьками: ловит нажатия только по пустой воде
+		NoSfx = true,
+	}, tank)
+	local MAX_PELLETS = 6
+	local pellets = 0
+	local lastDrop = 0
+
+	-- Сердечко над нажатым объектом (рыбой или местом, где поела рыба)
+	local function heartAt(position)
+		local heart = make("TextLabel", {
+			Name = "Heart",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = position,
+			Size = UDim2.fromOffset(26, 26),
+			BackgroundTransparency = 1,
+			Text = T("pet_heart"),
+			TextScaled = true,
+			TextTransparency = 0,
+			ZIndex = 6,
+		}, tank)
+		local rise = TweenService:Create(heart, TweenInfo.new(1.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			Position = UDim2.new(position.X.Scale, position.X.Offset, position.Y.Scale - 0.08, position.Y.Offset),
+			TextTransparency = 1,
+		})
+		rise:Play()
+		rise.Completed:Once(function()
+			heart:Destroy()
+		end)
+	end
+
+	Hints.heart = function(label)
+		if label.Parent == nil then
+			return
+		end
+		heartAt(label.Position)
+		-- маленький «прыжок» рыбы
+		local scale = label:FindFirstChildOfClass("UIScale")
+		if scale ~= nil then
+			local base = scale.Scale
+			TweenService:Create(scale, TweenInfo.new(0.12, Enum.EasingStyle.Quad), { Scale = base * 1.18 }):Play()
+			task.delay(0.14, function()
+				if scale.Parent ~= nil then
+					TweenService:Create(scale, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = base }):Play()
+				end
+			end)
+		end
+	end
+
+	Hints.eat = function(fish, feeding)
+		if feeding.pellet ~= nil and feeding.pellet.Parent ~= nil then
+			feeding.pellet:Destroy()
+			pellets = math.max(0, pellets - 1)
+			Hints.heart(fish.label)
+		end
+	end
+
+	feedZone.InputBegan:Connect(function(input)
+		if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
+			return
+		end
+		local now = os.clock()
+		if now - lastDrop < 0.35 or pellets >= MAX_PELLETS then
+			return
+		end
+		local size = tank.AbsoluteSize
+		if size.X < 1 or size.Y < 1 then
+			return
+		end
+		local x = math.clamp((input.Position.X - tank.AbsolutePosition.X) / size.X, 0.04, 0.96)
+		local y = math.clamp((input.Position.Y - tank.AbsolutePosition.Y) / size.Y, 0.08, 0.7)
+		lastDrop = now
+
+		-- ближайшая рыба текущего аквариума, которая сейчас ничем не занята
+		local best, bestDist = nil, math.huge
+		for _, fish in pairs(fishById) do
+			if fish.alive and fish.label.Visible and fish.feedTarget == nil then
+				local p = fish.label.Position
+				local d = (p.X.Scale - x) ^ 2 + (p.Y.Scale - y) ^ 2
+				if d < bestDist then
+					best, bestDist = fish, d
+				end
+			end
+		end
+		if best == nil then
+			return -- рыб нет: корм не бросаем
+		end
+
+		local pellet = make("Frame", {
+			Name = "Food",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(x, y),
+			Size = UDim2.fromOffset(9, 9),
+			BackgroundColor3 = Color3.fromRGB(240, 170, 80),
+			BorderSizePixel = 0,
+			ZIndex = 3,
+		}, tank)
+		make("UICorner", { CornerRadius = UDim.new(0.5, 0) }, pellet)
+		pellets += 1
+		Sfx.click()
+		local settleY = math.min(y + 0.05, 0.78)
+		TweenService:Create(pellet, TweenInfo.new(1.0, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), { Position = UDim2.fromScale(x, settleY) }):Play()
+		local feeding = { pos = UDim2.fromScale(x, settleY), pellet = pellet }
+		best.feedTarget = feeding
+		if best.tween ~= nil then
+			best.tween:Cancel() -- прерываем прежнее плавание: рыба сразу поплывёт к корму
+		end
+		-- не съели за 8 секунд — корм растворяется
+		task.delay(8, function()
+			if pellet.Parent ~= nil then
+				pellet:Destroy()
+				pellets = math.max(0, pellets - 1)
+			end
+		end)
+	end)
 end
 
 local slotsSynced = false -- первый ответ сервера не считаем «покупкой» для звука
@@ -2369,7 +2527,7 @@ do
 	shopPanel.title.Text = T("shop_title")
 	shopPanel.list.Size = UDim2.fromScale(0.9, 0.7)
 	ListKit.scroll(shopPanel)
-	local shopButton = iconButton("ShopButton", "🛒", 0.725)
+	local shopButton = iconButton("ShopButton", "🛒", 0.665, T("btn_shop"))
 
 	-- Маленький значок «×2» у монет (на нижнем крае, чтобы не закрывать число)
 	local doubleBadge = make("TextLabel", {
@@ -2742,7 +2900,7 @@ do
 		for _, fish in pairs(fishById) do
 			local data = fish.data
 			local age = data.age + (os.clock() - fish.receivedAt)
-			local bonus = (setsState[data.tank] and setsState[data.tank].bonus) or 0
+			local bonus = ((setsState[data.tank] and setsState[data.tank].bonus) or 0) + (DecorUi.data.bonus[data.tank] or 0)
 			local flow = 1
 			local cur = CurrentUi.state and CurrentUi.state.current
 			if cur ~= nil and cur.tank == data.tank and cur.left - (os.clock() - CurrentUi.receivedAt) > 0 then
@@ -3242,16 +3400,17 @@ do
 		local SocialService = game:GetService("SocialService")
 		local visit = { view = nil, receivedAt = 0, fish = {}, token = 0 }
 
-		tankButton.Size = UDim2.fromScale(0.6, TOP_H) -- место под кнопку гостей
+		tankButton.Size = UDim2.fromScale(0.59, TOP_H) -- место под кнопку гостей
 		local guestsButton = make("TextButton", {
 			Name = "GuestsButton",
-			Position = UDim2.fromScale(0.63, TANK_ROW_Y),
-			Size = UDim2.fromScale(0.11, TOP_H),
+			Position = UDim2.fromScale(0.615, TANK_ROW_Y),
+			Size = UDim2.fromScale(0.125, TOP_H),
 			BackgroundColor3 = COLOR_PANEL,
 			BorderSizePixel = 0,
-			Text = "👥",
+			Text = "👥\n" .. T("btn_guests"),
 			TextScaled = true,
-			MinText = 14,
+			TextWrapped = true,
+			MinText = 9,
 			MaxText = 30,
 			TextColor3 = WHITE,
 			Font = FONT,
@@ -3591,7 +3750,7 @@ do
 				if visit.clearDecor ~= nil then
 					visit.clearDecor()
 				end
-				visit.clearDecor = DecorUi.build(view, v.tank, 7)
+				visit.clearDecor = DecorUi.build(view, v.tank, 7, v.decor)
 				local token = visit.token
 				for _, data in ipairs(v.fish or {}) do
 					spawnFish(data, token)
@@ -3943,8 +4102,9 @@ do
 	-- ----- Декор -----
 	-- Строит декор аквариума tankId внутри parent. interactive = false — без нажатий (в гостях).
 	-- Возвращает функцию очистки.
-	local function buildDecor(parent, tankId, interactive, z)
+	local function buildDecor(parent, tankId, interactive, z, ownedMap)
 		z = z or 2
+		ownedMap = ownedMap or DecorUi.data.owned
 		local list = FishConfig.Decor and FishConfig.Decor[tankId]
 		local alive = true
 		local items = {}
@@ -3999,6 +4159,10 @@ do
 
 		for index, d in ipairs(list or {}) do
 			local data = SpriteData[d.id]
+			local locked = d.key ~= nil and ownedMap[d.key] ~= true -- наполнение, которое ещё не куплено
+			if locked and not interactive then
+				data = nil -- у гостя непокупленное наполнение хозяина не показываем
+			end
 			if data ~= nil then
 				-- holder вдвое выше картинки, центр holder — низ картинки: поворот идёт вокруг «корня»
 				local holder = make("Frame", {
@@ -4008,7 +4172,7 @@ do
 					BackgroundTransparency = 1,
 					ZIndex = z,
 				}, layer)
-				local className = if interactive and d.tap ~= nil then "ImageButton" else "ImageLabel"
+				local className = if interactive and (d.tap ~= nil or locked) then "ImageButton" else "ImageLabel"
 				local image = Instance.new(className)
 				image.Name = "Image"
 				image.Size = UDim2.fromScale(1, 0.5)
@@ -4026,11 +4190,32 @@ do
 				local scale = Instance.new("UIScale")
 				scale.Parent = image
 				image.Parent = holder
+				if locked then
+					-- тень предмета с ценой: нажмите, чтобы купить
+					image.ImageColor3 = Color3.fromRGB(60, 75, 100)
+					image.ImageTransparency = 0.35
+					local tag = make("TextLabel", {
+						Name = "PriceTag",
+						AnchorPoint = Vector2.new(0.5, 0.5),
+						Position = UDim2.fromScale(0.5, 0.25),
+						Size = UDim2.fromOffset(64, 18),
+						BackgroundColor3 = Color3.fromRGB(20, 30, 50),
+						BackgroundTransparency = 0.25,
+						BorderSizePixel = 0,
+						Text = T("decor_tag", d.price),
+						TextSize = 12,
+						TextColor3 = COLOR_GOLD,
+						ZIndex = z + 1,
+					}, holder)
+					make("UICorner", { CornerRadius = UDim.new(0.4, 0) }, tag)
+				end
 				local it = { holder = holder, image = image, scale = scale, w = data.w, h = data.h, def = d, opened = false }
 				table.insert(items, it)
 
 				-- анимации
-				if d.anim == "sway" then
+				if locked then
+					-- тень стоит неподвижно
+				elseif d.anim == "sway" then
 					local angle = 2 + rng:NextNumber() * 2
 					holder.Rotation = -angle
 					task.delay(rng:NextNumber() * 2, function()
@@ -4057,6 +4242,10 @@ do
 				-- нажатия
 				if className == "ImageButton" then
 					image.Activated:Connect(function()
+						if locked then
+							DecorUi.ask(d.key)
+							return
+						end
 						local u = unit(parent)
 						local topY = d.y - (data.h * u * itemScale) / math.max(parent.AbsoluteSize.Y, 1)
 						if d.tap == "open" then
@@ -4109,10 +4298,92 @@ do
 		end
 		clearOwn = buildDecor(tank, tankId, true, 1) -- слой фона: рыбы (2) всегда поверх
 	end
-	DecorUi.build = function(parent, tankId, z)
-		return buildDecor(parent, tankId, false, z)
+	DecorUi.build = function(parent, tankId, z, owned)
+		return buildDecor(parent, tankId, false, z, owned or {})
+	end
+	function DecorUi.refresh()
+		shownTank = nil
+		DecorUi.show(currentTank)
 	end
 	pcall(DecorUi.show, currentTank)
+
+	-- ----- Покупка наполнения: окошко «название · бонус · цена» -----
+	local buyDecorEvent = remotes:WaitForChild("BuyDecor")
+	local decorStateEvent = remotes:WaitForChild("DecorState")
+	local ask = make("Frame", {
+		Name = "DecorAsk",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(0.82, 0.3),
+		BackgroundColor3 = COLOR_PANEL,
+		BorderSizePixel = 0,
+		Active = true,
+		Visible = false,
+		ZIndex = 18,
+	}, gui)
+	make("UICorner", { CornerRadius = UDim.new(0.08, 0) }, ask)
+	UIKit.frame(ask, "ui_panel")
+	local askTitle = make("TextLabel", {
+		Position = UDim2.fromScale(0.05, 0.05), Size = UDim2.fromScale(0.9, 0.22), BackgroundTransparency = 1,
+		TextScaled = true, MinText = 12, TextColor3 = WHITE, Font = FONT, ZIndex = 19,
+	}, ask)
+	local askBonus = make("TextLabel", {
+		Position = UDim2.fromScale(0.05, 0.3), Size = UDim2.fromScale(0.9, 0.18), BackgroundTransparency = 1,
+		TextScaled = true, MinText = 11, MaxText = 20, TextColor3 = COLOR_GOLD, Font = FONT, ZIndex = 19,
+	}, ask)
+	local askBuy = make("TextButton", {
+		Position = UDim2.fromScale(0.05, 0.54), Size = UDim2.fromScale(0.9, 0.2), BackgroundColor3 = COLOR_BUTTON,
+		BorderSizePixel = 0, TextScaled = true, MinText = 12, TextColor3 = WHITE, Font = FONT, ZIndex = 19,
+	}, ask)
+	make("UICorner", { CornerRadius = UDim.new(0.25, 0) }, askBuy)
+	local askCancel = make("TextButton", {
+		Position = UDim2.fromScale(0.2, 0.78), Size = UDim2.fromScale(0.6, 0.16), BackgroundColor3 = COLOR_PANEL,
+		BorderSizePixel = 0, TextScaled = true, MinText = 11, TextColor3 = WHITE, Font = FONT, ZIndex = 19, Text = T("decor_cancel"),
+	}, ask)
+	make("UICorner", { CornerRadius = UDim.new(0.25, 0) }, askCancel)
+	local askKey = nil
+	askCancel.Activated:Connect(function()
+		ask.Visible = false
+		askKey = nil
+	end)
+	askBuy.Activated:Connect(function()
+		local key = askKey
+		ask.Visible = false
+		askKey = nil
+		if key ~= nil then
+			buyDecorEvent:FireServer(key) -- только ключ предмета: цену и бонус считает сервер
+		end
+	end)
+	function DecorUi.ask(key)
+		local item = FishConfig.DecorItems[key]
+		if item == nil or DecorUi.data.owned[key] then
+			return
+		end
+		askKey = key
+		askTitle.Text = Strings.decor(item.id)
+		askBonus.Text = T("decor_bonus", string.format("%g", math.floor(item.bonus * 1000 + 0.5) / 10))
+		askBuy.Text = T("decor_buy", item.price)
+		ask.Visible = true
+	end
+
+	decorStateEvent.OnClientEvent:Connect(function(state)
+		if typeof(state) ~= "table" then
+			return
+		end
+		DecorUi.data.owned = state.owned or {}
+		DecorUi.data.bonus = state.bonus or {}
+		DecorUi.refresh()
+		refreshCollection()
+		if state.bought ~= nil then
+			local item = FishConfig.DecorItems[state.bought]
+			if item ~= nil then
+				showToast(T("decor_bought", Strings.decor(item.id), string.format("%g", math.floor(item.bonus * 1000 + 0.5) / 10)), COLOR_BUTTON, 3)
+				playPop(1.2)
+			end
+		elseif state.fail == "coins" then
+			showToast(T("toast_coins"), nil, 2)
+		end
+	end)
 
 	-- ----- Обычные пузырьки: поднимаются позади рыб, лопаются от нажатия -----
 	local BUBBLE_COUNT = 12
@@ -4371,7 +4642,7 @@ local function buildAdminPanel()
 		adminCommandEvent:FireServer("reset")
 	end)
 
-	local openButton = iconButton("AdminButton", "⚙", 0.7)
+	local openButton = iconButton("AdminButton", "⚙", 0.7, "Admin")
 	openButton.Activated:Connect(function()
 		panel.overlay.Visible = true
 	end)

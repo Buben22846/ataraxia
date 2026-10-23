@@ -26,6 +26,7 @@ local Social = require(ServerScriptService:WaitForChild("Social"))
 local Tide = require(ServerScriptService:WaitForChild("Tide"))
 local Leaderboards = require(ServerScriptService:WaitForChild("Leaderboards"))
 local Bubbles = require(ServerScriptService:WaitForChild("Bubbles"))
+local Decor = require(ServerScriptService:WaitForChild("Decor"))
 
 -- ===== НАСТРОЙКИ =====
 -- Аквариумы игрока лежат в профиле (profile.tanks[id] = { slots, fish }), максимум мест и цены — в FishConfig.
@@ -61,6 +62,8 @@ local leaderboardActionEvent = remotes:WaitForChild("LeaderboardAction")
 local leaderboardStateEvent = remotes:WaitForChild("LeaderboardState")
 local goldBubbleEvent = remotes:WaitForChild("GoldBubble")
 local popBubbleEvent = remotes:WaitForChild("PopBubble")
+local buyDecorEvent = remotes:WaitForChild("BuyDecor")
+local decorStateEvent = remotes:WaitForChild("DecorState")
 local bubbleState = {} -- player -> состояние золотых пузырьков (Bubbles)
 
 -- Общая цель сервера во время Большого прилива (живёт только в памяти сервера)
@@ -335,6 +338,7 @@ local function pushState(player)
 	sendFish(player, profile)
 	sendCollection(player, profile)
 	sendSets(player, profile)
+	decorStateEvent:FireClient(player, Decor.state(profile))
 
 	dailyStateEvent:FireClient(player, DailyReward.state(profile, os.time()))
 	tutorialDoneEvent:FireClient(player, profile.tutorialDone)
@@ -694,6 +698,34 @@ settingsEvent.OnServerEvent:Connect(function(player, value)
 		return
 	end
 	profile.settings = { sfx = value.sfx, music = value.music }
+end)
+
+-- ===== Покупка наполнения аквариума =====
+-- Клиент присылает только ключ предмета: цену, аквариум и бонус сервер берёт из FishConfig.
+buyDecorEvent.OnServerEvent:Connect(function(player, key)
+	if not allow(player, "BuyDecor", 2, 3) then
+		return
+	end
+	if typeof(key) ~= "string" then
+		return
+	end
+	local profile = PlayerData.get(player)
+	if profile == nil then
+		return
+	end
+	local ok, info = Decor.buy(profile, key)
+	if not ok then
+		local state = Decor.state(profile)
+		state.fail = info -- "coins", "owned", "tank", "unknown"
+		decorStateEvent:FireClient(player, state)
+		return
+	end
+	Telemetry.sink(player, info, profile.coins, Telemetry.TxType.Shop, "decor_" .. key)
+	print(player.Name, "купил декор", key, "монет:", profile.coins)
+	sendCoins(player, profile)
+	local state = Decor.state(profile)
+	state.bought = key
+	decorStateEvent:FireClient(player, state)
 end)
 
 -- ===== Покупка места в аквариуме =====
