@@ -161,8 +161,8 @@ local function skinText(button, fixedLook)
 		pcall(function()
 			text.FontFace = button.FontFace
 		end)
-		text.TextScaled = button.TextScaled
 		text.TextSize = button.TextSize
+		text.TextScaled = button.TextScaled -- после TextSize: запись TextSize сбрасывает автомасштаб
 		text.TextWrapped = button.TextWrapped
 		text.TextXAlignment = button.TextXAlignment
 		text.RichText = button.RichText
