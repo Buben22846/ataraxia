@@ -20,6 +20,12 @@ SPRITES = [
     "penguin", "seal", "polar_shark", "beluga", "narwhal",
     "lantern_fish", "jellyfish", "anglerfish", "abyss_ray", "leviathan",
     "pumpkin_fish", "ghost_guppy", "bat_ray", "bone_fish", "jack_angler",  # ивент Хэллоуин
+    # пакет v06: 25 новых видов
+    "mandarin", "ember_lionfish", "sea_angel", "dusk_nautilus", "candle_nudibranch",
+    "sun_boxfish", "basalt_limpet", "frost_icefish", "glass_barreleye", "shroud_flatfish",
+    "reef_pennant", "cinder_horseshoe", "ice_scallop", "stilt_fish", "phantom_seahorse",
+    "petal_flyingfish", "kiln_chiton", "rime_lumpsucker", "velvet_gulper", "wake_tunicate",
+    "saffron_garden_eel", "kiln_cuttlefish", "snow_bolster_cucumber", "knot_hagfish", "pall_brittle_star",
 ]
 DECOR = sorted(f[:-4] for f in os.listdir(PNG) if f.startswith("decor_") and f.endswith(".png"))  # art/src/decor.py
 BACKGROUNDS = ["bg_lagoon", "bg_volcano", "bg_arctic", "bg_abyss", "bg_haunted"]

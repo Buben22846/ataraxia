@@ -81,7 +81,7 @@ return function()
 		},
 	}
 	local p7 = M._claim(1004)
-	check("миграция v1 -> v5: появились аквариум, места и lastSeen", p7 ~= nil and p7.version == 5 and p7.tanks.lagoon.slots == FishConfig.START_SLOTS and type(p7.lastSeen) == "number")
+	check("миграция v1 -> v6: появились аквариум, места и lastSeen", p7 ~= nil and p7.version == 6 and p7.tanks.lagoon.slots == FishConfig.START_SLOTS and type(p7.lastSeen) == "number")
 	check("миграция v1 -> v2: старые данные целы", p7 ~= nil and p7.coins == 321 and #p7.tanks.lagoon.fish == 1 and p7.speciesStats.guppy.pulled == 2)
 
 	data["Player_1005"] = { data = { version = 1, coins = 5 } }
@@ -94,7 +94,7 @@ return function()
 
 	data["Player_1006"] = { data = { version = 2, coins = 5, slots = 6, nextFishId = 1, fish = {}, discovered = {}, speciesStats = {} } }
 	local p9 = M._claim(1006)
-	check("миграция v2 -> v5: lastSeen появился, данные целы", p9 ~= nil and p9.version == 5 and type(p9.lastSeen) == "number" and p9.tanks.lagoon.slots == 6 and p9.coins == 5)
+	check("миграция v2 -> v6: lastSeen появился, данные целы", p9 ~= nil and p9.version == 6 and type(p9.lastSeen) == "number" and p9.tanks.lagoon.slots == 6 and p9.coins == 5)
 
 	-- ===== Рост, варианты, доход =====
 	check(
@@ -175,8 +175,8 @@ return function()
 	}
 	local p10 = M._claim(1007)
 	check(
-		"миграция v3 -> v5: рыбы и места переехали в лагуну",
-		p10 ~= nil and p10.version == 5 and p10.tanks.lagoon.slots == 7 and #p10.tanks.lagoon.fish == 1 and p10.slots == nil and p10.fish == nil
+		"миграция v3 -> v6: рыбы и места переехали в лагуну",
+		p10 ~= nil and p10.version == 6 and p10.tanks.lagoon.slots == 7 and #p10.tanks.lagoon.fish == 1 and p10.slots == nil and p10.fish == nil
 	)
 
 	local tanksOk = true
@@ -826,6 +826,95 @@ return function()
 		check("декор: доход с бонусом не меньше дохода без него", withDecor >= withoutDecor and before == 0)
 		local ds = Decor.state(dp)
 		check("декор: состояние для клиента без купленного пустое", next(ds.owned) == nil and ds.bonus.lagoon == 0)
+	end
+
+	-- ===== Каталог 50 видов и защита заработанных наборов =====
+	do
+		local Collection = require(ServerScriptService.Collection)
+		local SpriteData = require(ReplicatedStorage.Shared.SpriteData)
+		local inOrder, dup = {}, false
+		for _, id in ipairs(FishConfig.SpeciesOrder) do
+			if inOrder[id] then
+				dup = true
+			end
+			inOrder[id] = true
+		end
+		local allListed, allHaveSprite = true, true
+		local speciesCount = 0
+		for id, def in pairs(FishConfig.Species) do
+			speciesCount += 1
+			if not inOrder[id] then
+				allListed = false
+			end
+			if SpriteData[id] == nil then
+				allHaveSprite = false
+			end
+			if def.income == nil or def.income <= 0 or def.sellPrice == nil or def.sellPrice <= def.income or def.emoji == nil then
+				allListed = false
+			end
+		end
+		check("каталог: 50 видов, без повторов в порядке", speciesCount == 50 and #FishConfig.SpeciesOrder == 50 and not dup)
+		check("каталог: у каждого вида есть место в порядке и цены", allListed)
+		check("каталог: у каждого вида есть спрайт", allHaveSprite)
+		local baselineOk = true
+		for id in pairs(FishConfig.BaselineSpecies) do
+			if FishConfig.Species[id] == nil then
+				baselineOk = false
+			end
+		end
+		check("каталог: все исходные 25 видов на месте", baselineOk and FishConfig.Species.mandarin ~= nil and FishConfig.Species.mandarin.tank == "lagoon")
+
+		-- старый игрок: собрал все исходные виды лагуны (обычные, золотые, радужные) ДО расширения каталога
+		local function legacyProfile()
+			local lp = M._newProfile()
+			for id in pairs(FishConfig.BaselineSpecies) do
+				if FishConfig.Species[id].tank == "lagoon" then
+					lp.discovered[id] = true
+					lp.seen[id .. "/golden"] = true
+					lp.seen[id .. "/rainbow"] = true
+				end
+			end
+			return lp
+		end
+		local lp = legacyProfile()
+		check("наборы: без защиты расширение каталога обнуляет бонус (воспроизведение проблемы)", Collection.bonus(lp, "lagoon") == 0)
+		lp.setsEarned = Collection.baselineEarned(lp)
+		check("наборы: исходные ступени лагуны остаются заработанными (+85%)", math.abs(Collection.bonus(lp, "lagoon") - 0.85) < 1e-9)
+		check("наборы: бонус других аквариумов не выдан зря", Collection.bonus(lp, "volcano") == 0)
+		local prog = Collection.tankProgress(lp, "lagoon")
+		check("наборы: прогресс показывает новый каталог (5 из 10)", prog[1].have == 5 and prog[1].need == 10 and prog[1].done == true)
+
+		-- миграция сохранённого профиля v5 -> v6 через заглушку хранилища
+		local old = legacyProfile()
+		old.version = 5
+		old.setsEarned = nil
+		data["Player_3001"] = { data = old }
+		local migrated = M._claim(3001)
+		check("миграция v5 -> v6: заработанные наборы сохранены", migrated ~= nil and migrated.version == 6 and math.abs(Collection.bonus(migrated, "lagoon") - 0.85) < 1e-9)
+		local fresh = M._newProfile()
+		check("новый игрок: заработанных наборов нет", next(fresh.setsEarned) == nil and Collection.bonus(fresh, "lagoon") == 0)
+
+		-- новые виды открываются обычным способом и не ломают заработанное
+		lp.discovered.mandarin = true
+		Collection.sync(lp)
+		check("наборы: после открытия нового вида бонус не падает", math.abs(Collection.bonus(lp, "lagoon") - 0.85) < 1e-9)
+		-- полный набор нового каталога записывается как заработанный
+		local full = M._newProfile()
+		for _, id in ipairs(FishConfig.speciesOfTank("volcano")) do
+			full.discovered[id] = true
+		end
+		Collection.sync(full)
+		check("наборы: полный набор нового каталога записывается", full.setsEarned.volcano ~= nil and full.setsEarned.volcano.found == true and math.abs(Collection.bonus(full, "volcano") - 0.10) < 1e-9)
+
+		-- выпадение: новые виды достижимы только в своём аквариуме
+		local PackRoller = require(ServerScriptService.PackRoller)
+		local reachable = {}
+		for _ = 1, 4000 do
+			local speciesId = PackRoller.roll(FishConfig.Packs.lagoon)
+			reachable[speciesId] = true
+		end
+		check("выпадение: Мандаринка выпадает из пака лагуны", reachable.mandarin == true)
+		check("выпадение: вулканических рыб в паке лагуны нет", reachable.ember_lionfish == nil and reachable.basalt_limpet == nil)
 	end
 
 	-- ===== Конфиг =====

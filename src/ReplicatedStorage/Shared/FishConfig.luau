@@ -49,15 +49,62 @@ FishConfig.Species = {
 	bone_fish = { tank = "haunted", name = "Рыба-скелет", emoji = "💀", rarity = "epic", income = 120, sellPrice = 700 },
 	jack_angler = { tank = "haunted", name = "Удильщик Джек", emoji = "🕯️", rarity = "legendary", income = 300, sellPrice = 1800 },
 	leviathan = { tank = "abyss", name = "Левиафан", emoji = "🐲", rarity = "legendary", income = 10000, sellPrice = 60000 },
+
+	-- ===== Пакет v06: ещё 25 видов (по 5 на аквариум); цифры подобраны рядом с видами той же редкости =====
+	-- Тихая лагуна
+	mandarin = { tank = "lagoon", name = "Мандаринка", emoji = "🐠", rarity = "rare", income = 5, sellPrice = 25 },
+	sun_boxfish = { tank = "lagoon", name = "Солнечный кузовок", emoji = "☀️", rarity = "common", income = 2, sellPrice = 9 },
+	reef_pennant = { tank = "lagoon", name = "Рифовый вымпел", emoji = "🎏", rarity = "rare", income = 4, sellPrice = 22 },
+	petal_flyingfish = { tank = "lagoon", name = "Летучка-лепесток", emoji = "🌸", rarity = "rare", income = 5, sellPrice = 26 },
+	saffron_garden_eel = { tank = "lagoon", name = "Шафрановый садовник", emoji = "🪱", rarity = "rare", income = 6, sellPrice = 30 },
+	-- Вулканический риф
+	ember_lionfish = { tank = "volcano", name = "Угольная крылатка", emoji = "🔥", rarity = "epic", income = 88, sellPrice = 520 },
+	basalt_limpet = { tank = "volcano", name = "Базальтовый колпачок", emoji = "🪨", rarity = "common", income = 9, sellPrice = 45 },
+	cinder_horseshoe = { tank = "volcano", name = "Пепельный мечехвост", emoji = "🦀", rarity = "rare", income = 34, sellPrice = 170 },
+	kiln_chiton = { tank = "volcano", name = "Печной хитон", emoji = "🐛", rarity = "common", income = 10, sellPrice = 48 },
+	kiln_cuttlefish = { tank = "volcano", name = "Печная каракатица", emoji = "🦑", rarity = "rare", income = 36, sellPrice = 180 },
+	-- Ледяной грот
+	sea_angel = { tank = "arctic", name = "Морской ангел", emoji = "👼", rarity = "rare", income = 250, sellPrice = 1260 },
+	frost_icefish = { tank = "arctic", name = "Инеевый белокровник", emoji = "🧊", rarity = "common", income = 70, sellPrice = 340 },
+	ice_scallop = { tank = "arctic", name = "Ледяной гребешок", emoji = "🦪", rarity = "rare", income = 260, sellPrice = 1300 },
+	rime_lumpsucker = { tank = "arctic", name = "Инеевый пинагор", emoji = "🐟", rarity = "rare", income = 270, sellPrice = 1350 },
+	snow_bolster_cucumber = { tank = "arctic", name = "Снежная голотурия", emoji = "🥒", rarity = "common", income = 80, sellPrice = 380 },
+	-- Бездна
+	dusk_nautilus = { tank = "abyss", name = "Сумеречный наутилус", emoji = "🐚", rarity = "epic", income = 4300, sellPrice = 25800 },
+	glass_barreleye = { tank = "abyss", name = "Купологлаз", emoji = "🔮", rarity = "rare", income = 1700, sellPrice = 10200 },
+	stilt_fish = { tank = "abyss", name = "Рыба-ходульщик", emoji = "🕷️", rarity = "epic", income = 4600, sellPrice = 27600 },
+	velvet_gulper = { tank = "abyss", name = "Бархатный большерот", emoji = "👄", rarity = "epic", income = 4800, sellPrice = 28800 },
+	knot_hagfish = { tank = "abyss", name = "Узловая миксина", emoji = "🪢", rarity = "epic", income = 5000, sellPrice = 30000 },
+	-- Призрачный пруд
+	candle_nudibranch = { tank = "haunted", name = "Свечной слизень", emoji = "🕯️", rarity = "rare", income = 55, sellPrice = 275 },
+	shroud_flatfish = { tank = "haunted", name = "Камбала-плащ", emoji = "🪦", rarity = "common", income = 18, sellPrice = 72 },
+	phantom_seahorse = { tank = "haunted", name = "Конёк-миротворец", emoji = "🐴", rarity = "epic", income = 140, sellPrice = 800 },
+	wake_tunicate = { tank = "haunted", name = "Заупокойная асцидия", emoji = "🍶", rarity = "rare", income = 60, sellPrice = 300 },
+	pall_brittle_star = { tank = "haunted", name = "Офиура-плакальщица", emoji = "⭐", rarity = "rare", income = 65, sellPrice = 325 },
 }
 
 -- Порядок видов (для интерфейса коллекции и шансов)
 FishConfig.SpeciesOrder = {
 	"guppy", "clown", "puffer", "whale", "octopus",
+	"mandarin", "sun_boxfish", "reef_pennant", "petal_flyingfish", "saffron_garden_eel",
 	"ember_shrimp", "magma_crab", "fire_eel", "caldera_squid", "magma_dragon",
+	"ember_lionfish", "basalt_limpet", "cinder_horseshoe", "kiln_chiton", "kiln_cuttlefish",
 	"penguin", "seal", "polar_shark", "beluga", "narwhal",
+	"sea_angel", "frost_icefish", "ice_scallop", "rime_lumpsucker", "snow_bolster_cucumber",
 	"lantern_fish", "jellyfish", "anglerfish", "abyss_ray", "leviathan",
+	"dusk_nautilus", "glass_barreleye", "stilt_fish", "velvet_gulper", "knot_hagfish",
 	"pumpkin_fish", "ghost_guppy", "bat_ray", "bone_fish", "jack_angler",
+	"candle_nudibranch", "shroud_flatfish", "phantom_seahorse", "wake_tunicate", "pall_brittle_star",
+}
+
+-- Исходные 25 видов (до пакета v06). Нужны, чтобы заработанные наборы коллекции не пропали при росте каталога
+-- (см. Collection.baselineEarned и миграцию профиля v5 -> v6). Не менять и не дополнять.
+FishConfig.BaselineSpecies = {
+	guppy = true, clown = true, puffer = true, whale = true, octopus = true,
+	ember_shrimp = true, magma_crab = true, fire_eel = true, caldera_squid = true, magma_dragon = true,
+	penguin = true, seal = true, polar_shark = true, beluga = true, narwhal = true,
+	lantern_fish = true, jellyfish = true, anglerfish = true, abyss_ray = true, leviathan = true,
+	pumpkin_fish = true, ghost_guppy = true, bat_ray = true, bone_fish = true, jack_angler = true,
 }
 
 -- Аквариумы. У каждого свои рыбы (Species.tank), свой пак и своя цена мест.
