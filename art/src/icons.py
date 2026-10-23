@@ -149,10 +149,10 @@ def gear():
 
 def ticket():
     p = Pen()
-    p.rrect((2, 6, 22, 18), "#ffd166", 2, fill="#ffd166", r=2)
-    p.circle(2, 12, 2.2, "#0a2540", fill=True)
-    p.circle(22, 12, 2.2, "#0a2540", fill=True)
-    p.line([(9, 8.5), (9, 15.5)], BROWN, 1.6)
+    p.rrect((2, 6, 22, 18), BROWN, 2, fill=BROWN, r=2)
+    p.circle(2, 12, 2.2, GOLD, fill=True)
+    p.circle(22, 12, 2.2, GOLD, fill=True)
+    p.line([(9, 8.5), (9, 15.5)], GOLD, 1.6)
     return p.finish()
 
 

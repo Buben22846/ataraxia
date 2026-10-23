@@ -4831,6 +4831,8 @@ local function buildAdminPanel()
 	end)
 
 	local openButton = iconButton("AdminButton", "ic_gear", 0.7, "Admin")
+	openButton.Position = UDim2.fromScale(0.01, 0.3) -- сбоку, чтобы не накладываться на «Магазин»
+	openButton.Size = UDim2.fromScale(0.13, TOP_H)
 	openButton.Activated:Connect(function()
 		panel.overlay.Visible = true
 	end)
