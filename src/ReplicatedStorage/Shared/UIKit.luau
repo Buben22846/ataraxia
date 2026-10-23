@@ -5,6 +5,7 @@
 -- Вид кнопки выбирается по её BackgroundColor3 (бирюзовый, золотой, тёмный, серый) и меняется вместе с ним.
 
 local Sprites = require(script.Parent:WaitForChild("Sprites"))
+local SpriteData = require(script.Parent:WaitForChild("SpriteData"))
 
 local UIKit = {}
 
@@ -31,14 +32,22 @@ local SLICE = {
 	ui_ticket = { w = 32, h = 16, cx = 10, cy = 5 },
 	ui_ticket_down = { w = 32, h = 16, cx = 10, cy = 5 },
 }
+SLICE.ui_btn_gold_big = { size = 24, corner = 8 }
+SLICE.ui_btn_gold_big_down = { size = 24, corner = 8 }
+for _, name in ipairs({ "ui_btn_coral", "ui_btn_coral_down", "ui_btn_blue", "ui_btn_blue_down", "ui_btn_pink", "ui_btn_pink_down" }) do
+	SLICE[name] = { size = 16, corner = 5 }
+end
 for _, name in ipairs({ "ui_btn", "ui_btn_down", "ui_btn_gold", "ui_btn_gold_down", "ui_btn_dark", "ui_btn_dark_down", "ui_btn_off" }) do
 	SLICE[name] = { size = 16, corner = 5 }
 end
 
 -- По цвету фона кнопки: какая картинка (обычная, нажатая)
 local LOOKS = {
-	{ color = Color3.fromRGB(38, 166, 154), up = "ui_btn", down = "ui_btn_down" }, -- бирюзовая
-	{ color = Color3.fromRGB(255, 202, 40), up = "ui_btn_gold", down = "ui_btn_gold_down" }, -- золотая
+	{ color = Color3.fromRGB(38, 166, 154), up = "ui_btn", down = "ui_btn_down", pattern = "pat_bubbles" }, -- бирюзовая: пузырьки
+	{ color = Color3.fromRGB(255, 202, 40), up = "ui_btn_gold", down = "ui_btn_gold_down", pattern = "pat_sparkle" }, -- золотая: искры
+	{ color = Color3.fromRGB(198, 63, 38), up = "ui_btn_coral", down = "ui_btn_coral_down", pattern = "pat_stripes" }, -- коралловая: полоски
+	{ color = Color3.fromRGB(31, 100, 189), up = "ui_btn_blue", down = "ui_btn_blue_down", pattern = "pat_lines" }, -- синяя: линейка
+	{ color = Color3.fromRGB(184, 50, 107), up = "ui_btn_pink", down = "ui_btn_pink_down", pattern = "pat_dots" }, -- розовая: «чешуя»
 	{ color = Color3.fromRGB(10, 70, 95), up = "ui_btn_dark", down = "ui_btn_dark_down" }, -- тёмная (панели, значки)
 	{ color = Color3.fromRGB(120, 144, 156), up = "ui_btn_off", down = "ui_btn_off" }, -- серая (недоступно)
 	{ color = Color3.fromRGB(8, 52, 72), up = "ui_row", down = "ui_row" }, -- строка списка
@@ -131,6 +140,61 @@ function UIKit.frame(frame, id)
 	return ok and result == true
 end
 
+-- Узор поверх кнопки: маленькая плитка, которую повторяют по всей кнопке (внутри рамки)
+local patterned = setmetatable({}, { __mode = "k" }) -- ImageLabel -> { w, h }
+
+local function placePattern(label, w, h)
+	local scale = pixelScale()
+	local inset = 3 * scale
+	label.Position = UDim2.fromOffset(inset, inset)
+	label.Size = UDim2.new(1, -2 * inset, 1, -2 * inset)
+	label.TileSize = UDim2.fromOffset(w * scale, h * scale)
+end
+
+local function setPattern(button, id, current)
+	local data = SpriteData[id]
+	if data == nil then
+		if current then
+			current.Visible = false
+		end
+		return current
+	end
+	local label = current
+	if label == nil then
+		label = Instance.new("ImageLabel")
+		label.Name = "Pattern"
+		label.BackgroundTransparency = 1
+		label.BorderSizePixel = 0
+		label.Active = false
+		label.ScaleType = Enum.ScaleType.Tile
+		label.ZIndex = button.ZIndex
+		button:GetPropertyChangedSignal("ZIndex"):Connect(function()
+			label.ZIndex = button.ZIndex
+		end)
+		label.Parent = button
+	end
+	if Sprites.apply(label, id, false) then
+		label.ScaleType = Enum.ScaleType.Tile
+		placePattern(label, data.w, data.h)
+		patterned[label] = { data.w, data.h }
+		label.Visible = true
+	else
+		label.Visible = false
+	end
+	return label
+end
+
+pcall(function()
+	local camera = workspace.CurrentCamera
+	if camera then
+		camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+			for label, size in pairs(patterned) do
+				placePattern(label, size[1], size[2])
+			end
+		end)
+	end
+end)
+
 -- Кнопка или подпись: картинка-фон + копия текста поверх (дети всегда рисуются над текстом самого элемента).
 -- fixedLook — не выбирать вид по цвету фона (для подписей).
 local function skinText(button, fixedLook)
@@ -143,6 +207,7 @@ local function skinText(button, fixedLook)
 		if image == nil then
 			return false
 		end
+		local patternLabel = if look.pattern then setPattern(button, look.pattern, nil) else nil
 		-- копия текста; textScale — доля ширины под текст (у билета края заняты корешками)
 		local textScale = look.textScale
 		local basePosition = if textScale then UDim2.fromScale(0.5, 0.5) else UDim2.new()
@@ -183,6 +248,9 @@ local function skinText(button, fixedLook)
 			if Sprites.apply(image, id, false) then
 				applySlice(image, id)
 			end
+			if look.pattern or patternLabel then
+				patternLabel = setPattern(button, look.pattern, patternLabel)
+			end
 			local shift = if pressed and look.down ~= look.up then pixelScale() else 0
 			text.Position = basePosition + UDim2.fromOffset(0, shift)
 		end
@@ -219,6 +287,57 @@ end
 
 function UIKit.button(button)
 	return skinText(button, nil)
+end
+
+-- Главная кнопка: крупная золотая «жемчужина» с искрами
+function UIKit.hero(button)
+	return skinText(button, { up = "ui_btn_gold_big", down = "ui_btn_gold_big_down", pattern = "pat_sparkle" })
+end
+
+-- Блик, пробегающий по кнопке раз в несколько секунд. Возвращает функцию остановки.
+function UIKit.shine(button, every)
+	every = every or 3.2
+	local TweenService = game:GetService("TweenService")
+	local clip = Instance.new("Frame")
+	clip.Name = "ShineClip"
+	clip.BackgroundTransparency = 1
+	clip.BorderSizePixel = 0
+	clip.ClipsDescendants = true
+	clip.Active = false
+	clip.Size = UDim2.fromScale(1, 1)
+	clip.ZIndex = button.ZIndex + 2
+	button:GetPropertyChangedSignal("ZIndex"):Connect(function()
+		clip.ZIndex = button.ZIndex + 2
+	end)
+	local band = Instance.new("ImageLabel")
+	band.BackgroundTransparency = 1
+	band.BorderSizePixel = 0
+	band.Active = false
+	band.ImageTransparency = 0.62
+	band.ScaleType = Enum.ScaleType.Stretch
+	band.AnchorPoint = Vector2.new(0, 0)
+	band.Size = UDim2.fromScale(0.22, 1)
+	band.Position = UDim2.fromScale(-0.3, 0)
+	band.ZIndex = clip.ZIndex
+	if not Sprites.apply(band, "fx_shine", false) then
+		clip:Destroy()
+		return function() end
+	end
+	band.Parent = clip
+	clip.Parent = button
+	local running = true
+	task.spawn(function()
+		while running and clip.Parent do
+			band.Position = UDim2.fromScale(-0.3, 0)
+			local tween = TweenService:Create(band, TweenInfo.new(0.9, Enum.EasingStyle.Sine), { Position = UDim2.fromScale(1.1, 0) })
+			tween:Play()
+			task.wait(every)
+		end
+	end)
+	return function()
+		running = false
+		clip:Destroy()
+	end
 end
 
 -- Подпись (монеты, число рыб): тёмная плитка без нажатия

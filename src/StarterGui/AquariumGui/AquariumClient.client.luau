@@ -388,7 +388,10 @@ local giftDot = make("Frame", {
 make("UICorner", { CornerRadius = UDim.new(0.5, 0) }, giftDot)
 make("UIStroke", { Color = WHITE, Thickness = 1.5 }, giftDot)
 
-local soundButton = iconButton("SoundButton", "🎧", 0.83, T("btn_sound")) -- открывает настройки звука (см. блок «Настройки» ниже)
+giftButton.BackgroundColor3 = COLOR_GOLD
+giftButton.TextColor3 = Color3.fromRGB(74, 44, 0)
+local soundButton = iconButton("SoundButton", "🎧", 0.83, T("btn_sound"))
+soundButton.BackgroundColor3 = Color3.fromRGB(31, 100, 189) -- открывает настройки звука (см. блок «Настройки» ниже)
 
 -- ===== Монеты и покупка пака =====
 buyButton.AnchorPoint = Vector2.new(0.5, 1)
@@ -400,8 +403,9 @@ make("UITextSizeConstraint", { MinTextSize = 8, MaxTextSize = 34 }, buyButton)
 make("UICorner", { CornerRadius = UDim.new(0.2, 0) }, buyButton)
 -- Кнопка паков — «цирковой билет», который пульсирует и привлекает внимание.
 -- Создана в Studio, а не через make(), поэтому скин вешаем вручную.
-buyButton.TextColor3 = Color3.fromRGB(255, 241, 193)
-UIKit.ticket(buyButton)
+buyButton.TextColor3 = Color3.fromRGB(74, 44, 0)
+buyButton.BackgroundColor3 = COLOR_GOLD
+UIKit.hero(buyButton)
 do
 	local skinned = buyButton:FindFirstChild("SkinText")
 	if skinned ~= nil then
@@ -409,6 +413,7 @@ do
 	end
 end
 UIKit.pulse(buyButton)
+UIKit.shine(buyButton, 3.2)
 
 local function refreshBuyButton()
 	local pack = currentPack()
@@ -430,17 +435,18 @@ coinsChangedEvent.OnClientEvent:Connect(function(newCoins)
 end)
 
 -- Вторичные кнопки над главной
-local function makeSecondaryButton(name, text, posX)
+local function makeSecondaryButton(name, text, posX, color)
 	local button = make("TextButton", {
 		Name = name,
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.fromScale(posX, 0.88),
-		Size = UDim2.fromScale(0.31, 0.075),
-		BackgroundColor3 = COLOR_PANEL,
+		Size = UDim2.fromScale(0.228, 0.075),
+		BackgroundColor3 = color or COLOR_PANEL,
 		BorderSizePixel = 0,
 		Text = text,
 		TextScaled = true,
-		MinText = 12,
+		TextWrapped = true,
+		MinText = 9,
 		TextColor3 = WHITE,
 		Font = FONT,
 		ZIndex = 3,
@@ -449,9 +455,9 @@ local function makeSecondaryButton(name, text, posX)
 	return button
 end
 
-local collectionButton = makeSecondaryButton("CollectionButton", "", 0.02)
-local oddsButton = makeSecondaryButton("OddsButton", T("odds"), 0.345)
-local expandButton = makeSecondaryButton("ExpandButton", "", 0.67)
+local collectionButton = makeSecondaryButton("CollectionButton", "", 0.02, Color3.fromRGB(198, 63, 38)) -- коралловая: полоски
+local oddsButton = makeSecondaryButton("OddsButton", T("odds"), 0.264, Color3.fromRGB(184, 50, 107)) -- розовая: «чешуя»
+local expandButton = makeSecondaryButton("ExpandButton", "", 0.508, COLOR_BUTTON) -- бирюзовая: пузырьки
 
 local tankSlots = {} -- [tankId] = сколько рыб помещается (присылает сервер; нет записи = аквариум не открыт)
 local tankCounts = {} -- [tankId] = сколько рыб сейчас
@@ -482,7 +488,7 @@ local tankButton = make("TextButton", {
 	Name = "TankButton",
 	Position = UDim2.fromScale(0.02, TANK_ROW_Y),
 	Size = UDim2.fromScale(0.72, TOP_H), -- справа от выбора аквариума стоит кнопка музея
-	BackgroundColor3 = COLOR_PANEL,
+	BackgroundColor3 = Color3.fromRGB(31, 100, 189),
 	BorderSizePixel = 0,
 	TextScaled = true,
 	MinText = 13,
@@ -1977,6 +1983,7 @@ do
 		TweenService:Create(pellet, TweenInfo.new(1.0, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), { Position = UDim2.fromScale(x, settleY) }):Play()
 		local feeding = { pos = UDim2.fromScale(x, settleY), pellet = pellet }
 		best.feedTarget = feeding
+		remotes:WaitForChild("FeedTap"):FireServer() -- сервер считает кормления для ежедневных заданий
 		if best.tween ~= nil then
 			best.tween:Cancel() -- прерываем прежнее плавание: рыба сразу поплывёт к корму
 		end
@@ -2532,6 +2539,7 @@ do
 	shopPanel.list.Size = UDim2.fromScale(0.9, 0.7)
 	ListKit.scroll(shopPanel)
 	local shopButton = iconButton("ShopButton", "🛒", 0.665, T("btn_shop"))
+	shopButton.BackgroundColor3 = COLOR_BUTTON
 
 	-- Маленький значок «×2» у монет (на нижнем крае, чтобы не закрывать число)
 	local doubleBadge = make("TextLabel", {
@@ -4827,6 +4835,227 @@ local function checkAdmin()
 end
 localPlayer:GetAttributeChangedSignal("IsAdmin"):Connect(checkAdmin)
 checkAdmin()
+
+-- ===== Ежедневные задания: полоска на экране, кнопка с цифрой и окно =====
+-- Сервер присылает состояние (прогресс считает он сам); клиент только показывает и просит забрать награду по id.
+do
+	local questStateEvent = remotes:WaitForChild("QuestState")
+	local questClaimEvent = remotes:WaitForChild("QuestClaim")
+	local DARK_TEXT = Color3.fromRGB(74, 44, 0)
+	local questState = nil
+	local receivedAt = 0
+
+	local tasksButton = makeSecondaryButton("TasksButton", T("btn_quests"), 0.752, Color3.fromRGB(31, 100, 189)) -- синяя: линейка
+	local badge = make("TextLabel", {
+		Name = "QuestBadge",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.92, 0.08),
+		Size = UDim2.fromScale(0.34, 0.34),
+		SizeConstraint = Enum.SizeConstraint.RelativeYY,
+		BackgroundColor3 = COLOR_GOLD,
+		BorderSizePixel = 0,
+		Text = "0",
+		TextScaled = true,
+		MinText = 8,
+		MaxText = 20,
+		TextColor3 = DARK_TEXT,
+		Font = FONT,
+		Visible = false,
+		ZIndex = 6,
+	}, tasksButton)
+	make("UICorner", { CornerRadius = UDim.new(0.5, 0) }, badge)
+	make("UIStroke", { Color = DARK_TEXT, Thickness = 2 }, badge)
+
+	local strip = make("TextButton", {
+		Name = "QuestStrip",
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.fromScale(0.5, 0.8),
+		Size = UDim2.fromScale(0.96, 0.052),
+		BackgroundColor3 = Color3.fromRGB(31, 100, 189),
+		BorderSizePixel = 0,
+		Text = "",
+		TextScaled = true,
+		MinText = 9,
+		MaxText = 22,
+		TextColor3 = WHITE,
+		Font = FONT,
+		ZIndex = 3,
+	}, gui)
+	make("UICorner", { CornerRadius = UDim.new(0.25, 0) }, strip)
+
+	local panel = makePanel("QuestPanel")
+	panel.title.Text = T("quest_title")
+	local timer = make("TextLabel", {
+		Name = "Timer",
+		Position = UDim2.fromScale(0.05, 0.745),
+		Size = UDim2.fromScale(0.9, 0.06),
+		BackgroundTransparency = 1,
+		TextScaled = true,
+		MinText = 9,
+		MaxText = 20,
+		TextColor3 = Color3.fromRGB(159, 232, 211),
+		Font = FONT,
+		Text = "",
+		ZIndex = 12,
+	}, panel.card)
+
+	-- четыре строки: три задания и общий приз
+	local rows = {}
+	local function newRow(id, order)
+		local row = make("Frame", {
+			Name = "Row_" .. id,
+			Size = UDim2.fromScale(1, 0.235),
+			BackgroundColor3 = COLOR_ROW,
+			BorderSizePixel = 0,
+			LayoutOrder = order,
+			ZIndex = 12,
+		}, panel.list)
+		make("UICorner", { CornerRadius = UDim.new(0.12, 0) }, row)
+		UIKit.frame(row, "ui_row")
+		local label = make("TextLabel", {
+			Position = UDim2.fromScale(0.04, 0.08),
+			Size = UDim2.fromScale(0.58, 0.46),
+			BackgroundTransparency = 1,
+			TextScaled = true,
+			TextWrapped = true,
+			MinText = 9,
+			MaxText = 22,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextColor3 = WHITE,
+			Font = FONT,
+			Text = "",
+			ZIndex = 13,
+		}, row)
+		local barBack = make("Frame", {
+			Position = UDim2.fromScale(0.04, 0.64),
+			Size = UDim2.fromScale(0.58, 0.2),
+			BackgroundColor3 = Color3.fromRGB(4, 28, 40),
+			BorderSizePixel = 0,
+			ZIndex = 13,
+		}, row)
+		local fill = make("Frame", {
+			Size = UDim2.fromScale(0, 1),
+			BackgroundColor3 = COLOR_GOLD,
+			BorderSizePixel = 0,
+			ZIndex = 14,
+		}, barBack)
+		local action = make("TextButton", {
+			Name = "Action",
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.fromScale(0.97, 0.5),
+			Size = UDim2.fromScale(0.3, 0.7),
+			BackgroundColor3 = COLOR_ROW,
+			BorderSizePixel = 0,
+			Text = "",
+			TextScaled = true,
+			MinText = 9,
+			MaxText = 22,
+			TextColor3 = COLOR_GOLD,
+			Font = FONT,
+			ZIndex = 13,
+		}, row)
+		make("UICorner", { CornerRadius = UDim.new(0.25, 0) }, action)
+		local entry = { label = label, fill = fill, action = action, id = id, ready = false }
+		action.Activated:Connect(function()
+			if entry.ready then
+				Sfx.play("buy")
+				questClaimEvent:FireServer(id)
+			end
+		end)
+		rows[id] = entry
+		return entry
+	end
+	for index, id in ipairs({ "coins", "feed", "pack" }) do
+		newRow(id, index)
+	end
+	newRow("bonus", 4)
+
+	local function setAction(entry, text, ready, done)
+		entry.ready = ready
+		entry.action.Text = text
+		entry.action.BackgroundColor3 = if ready then COLOR_GOLD else COLOR_ROW
+		entry.action.TextColor3 = if ready then DARK_TEXT elseif done then Color3.fromRGB(159, 232, 211) else COLOR_GOLD
+	end
+
+	local function refresh()
+		local state = questState
+		if state == nil then
+			return
+		end
+		local claimable = 0
+		local firstOpen = nil
+		for _, quest in ipairs(state.list) do
+			local entry = rows[quest.id]
+			entry.label.Text = T("quest_" .. quest.kind, quest.target)
+			entry.fill.Size = UDim2.fromScale(math.clamp(quest.progress / quest.target, 0, 1), 1)
+			local complete = quest.progress >= quest.target
+			if quest.claimed then
+				setAction(entry, T("quest_done"), false, true)
+			elseif complete then
+				setAction(entry, T("quest_claim", quest.reward), true, false)
+				claimable += 1
+			else
+				setAction(entry, quest.progress .. "/" .. quest.target, false, false)
+				firstOpen = firstOpen or quest
+			end
+		end
+		local bonus = rows.bonus
+		bonus.label.Text = T("quest_bonus", state.bonus)
+		bonus.fill.Size = UDim2.fromScale(state.done / state.total, 1)
+		if state.bonusClaimed then
+			setAction(bonus, T("quest_done"), false, true)
+		elseif state.bonusReady then
+			setAction(bonus, T("quest_claim", state.bonus), true, false)
+			claimable += 1
+		else
+			setAction(bonus, state.done .. "/" .. state.total, false, false)
+		end
+
+		badge.Visible = claimable > 0
+		badge.Text = tostring(claimable)
+
+		-- полоска на экране: что делать дальше
+		if claimable > 0 then
+			strip.Text = T("quest_strip_claim")
+			strip.BackgroundColor3 = COLOR_GOLD
+			strip.TextColor3 = DARK_TEXT
+		elseif firstOpen ~= nil then
+			strip.Text = T("quest_" .. firstOpen.kind, firstOpen.target) .. "  " .. firstOpen.progress .. "/" .. firstOpen.target
+			strip.BackgroundColor3 = Color3.fromRGB(31, 100, 189)
+			strip.TextColor3 = WHITE
+		else
+			strip.Text = T("quest_strip_done")
+			strip.BackgroundColor3 = COLOR_BUTTON
+			strip.TextColor3 = WHITE
+		end
+	end
+
+	questStateEvent.OnClientEvent:Connect(function(state)
+		if typeof(state) ~= "table" or typeof(state.list) ~= "table" then
+			return
+		end
+		questState = state
+		receivedAt = os.clock()
+		refresh()
+	end)
+
+	-- таймер до обновления заданий
+	task.spawn(function()
+		while true do
+			if questState ~= nil and panel.overlay.Visible then
+				local left = math.floor(math.max(0, questState.secondsLeft - (os.clock() - receivedAt)))
+				timer.Text = T("quest_reset", string.format("%02d:%02d:%02d", left // 3600, (left % 3600) // 60, left % 60))
+			end
+			task.wait(1)
+		end
+	end)
+
+	local function openPanel()
+		panel.overlay.Visible = true
+	end
+	tasksButton.Activated:Connect(openPanel)
+	strip.Activated:Connect(openPanel)
+end
 
 -- Все обработчики подключены: просим сервер прислать состояние (монеты, рыб, коллекцию, награду)
 clientReadyEvent:FireServer()

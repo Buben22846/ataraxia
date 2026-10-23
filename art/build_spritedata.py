@@ -28,9 +28,9 @@ SPRITES = [
     "saffron_garden_eel", "kiln_cuttlefish", "snow_bolster_cucumber", "knot_hagfish", "pall_brittle_star",
 ]
 DECOR = sorted(f[:-4] for f in os.listdir(PNG) if f.startswith("decor_") and f.endswith(".png"))  # art/src/decor.py
-FX = ["fx_star", "fx_star_small", "fx_coin"]  # art/src/fx.py: блёстки особых рыб и монетка-награда
+FX = ["fx_star", "fx_star_small", "fx_coin", "fx_shine"]  # art/src/fx.py: блёстки особых рыб и монетка-награда
 BACKGROUNDS = ["bg_lagoon", "bg_volcano", "bg_arctic", "bg_abyss", "bg_haunted"]
-UI = ["ui_banner", "ui_banner_night", "ui_banner_hall", "ui_banner_quick", "ui_icon_night", "ui_icon_hall", "ui_icon_quick", "ui_coin", "ui_ticket", "ui_ticket_down", "ui_panel", "ui_row", "ui_btn", "ui_btn_down", "ui_btn_gold", "ui_btn_gold_down", "ui_btn_dark", "ui_btn_dark_down", "ui_btn_off"]  # art/src/ui_kit.py
+UI = ["ui_banner", "ui_banner_night", "ui_banner_hall", "ui_banner_quick", "ui_icon_night", "ui_icon_hall", "ui_icon_quick", "ui_coin", "ui_ticket", "ui_ticket_down", "ui_panel", "ui_row", "ui_btn", "ui_btn_down", "ui_btn_gold", "ui_btn_gold_down", "ui_btn_dark", "ui_btn_dark_down", "ui_btn_off", "ui_btn_coral", "ui_btn_coral_down", "ui_btn_blue", "ui_btn_blue_down", "ui_btn_pink", "ui_btn_pink_down", "ui_btn_gold_big", "ui_btn_gold_big_down", "pat_stripes", "pat_lines", "pat_dots", "pat_bubbles", "pat_sparkle"]  # art/src/ui_kit.py, ui_kit2.py
 
 
 def encode(name):

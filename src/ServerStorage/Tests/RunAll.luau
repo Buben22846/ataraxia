@@ -81,7 +81,7 @@ return function()
 		},
 	}
 	local p7 = M._claim(1004)
-	check("миграция v1 -> v6: появились аквариум, места и lastSeen", p7 ~= nil and p7.version == 6 and p7.tanks.lagoon.slots == FishConfig.START_SLOTS and type(p7.lastSeen) == "number")
+	check("миграция v1 -> v7: появились аквариум, места и lastSeen", p7 ~= nil and p7.version == 7 and p7.tanks.lagoon.slots == FishConfig.START_SLOTS and type(p7.lastSeen) == "number")
 	check("миграция v1 -> v2: старые данные целы", p7 ~= nil and p7.coins == 321 and #p7.tanks.lagoon.fish == 1 and p7.speciesStats.guppy.pulled == 2)
 
 	data["Player_1005"] = { data = { version = 1, coins = 5 } }
@@ -94,7 +94,7 @@ return function()
 
 	data["Player_1006"] = { data = { version = 2, coins = 5, slots = 6, nextFishId = 1, fish = {}, discovered = {}, speciesStats = {} } }
 	local p9 = M._claim(1006)
-	check("миграция v2 -> v6: lastSeen появился, данные целы", p9 ~= nil and p9.version == 6 and type(p9.lastSeen) == "number" and p9.tanks.lagoon.slots == 6 and p9.coins == 5)
+	check("миграция v2 -> v7: lastSeen появился, данные целы", p9 ~= nil and p9.version == 7 and type(p9.lastSeen) == "number" and p9.tanks.lagoon.slots == 6 and p9.coins == 5)
 
 	-- ===== Рост, варианты, доход =====
 	check(
@@ -176,7 +176,7 @@ return function()
 	local p10 = M._claim(1007)
 	check(
 		"миграция v3 -> v6: рыбы и места переехали в лагуну",
-		p10 ~= nil and p10.version == 6 and p10.tanks.lagoon.slots == 7 and #p10.tanks.lagoon.fish == 1 and p10.slots == nil and p10.fish == nil
+		p10 ~= nil and p10.version == 7 and p10.tanks.lagoon.slots == 7 and #p10.tanks.lagoon.fish == 1 and p10.slots == nil and p10.fish == nil
 	)
 
 	local tanksOk = true
@@ -890,7 +890,7 @@ return function()
 		old.setsEarned = nil
 		data["Player_3001"] = { data = old }
 		local migrated = M._claim(3001)
-		check("миграция v5 -> v6: заработанные наборы сохранены", migrated ~= nil and migrated.version == 6 and math.abs(Collection.bonus(migrated, "lagoon") - 0.85) < 1e-9)
+		check("миграция v5 -> v7: заработанные наборы сохранены", migrated ~= nil and migrated.version == 7 and migrated.quests ~= nil and math.abs(Collection.bonus(migrated, "lagoon") - 0.85) < 1e-9)
 		local fresh = M._newProfile()
 		check("новый игрок: заработанных наборов нет", next(fresh.setsEarned) == nil and Collection.bonus(fresh, "lagoon") == 0)
 
@@ -973,6 +973,33 @@ return function()
 		last = price or last
 	end
 	check("цены мест заданы и растут", pricesOk)
+
+
+	-- ===== Ежедневные задания =====
+	do
+		local Quests = require(ServerScriptService.Quests)
+		local PlayerData = require(ServerScriptService.PlayerData)
+		local qp = PlayerData._newProfile()
+		local t0 = 5 * 86400 + 100
+		check("задания: сначала ничего не выполнено", Quests.state(qp, t0).done == 0)
+		Quests.add(qp, "coins", 3, t0)
+		check("задания: прогресс растёт", Quests.state(qp, t0).list[1].progress == 3)
+		Quests.add(qp, "coins", 99, t0)
+		check("задания: прогресс не выше цели", Quests.state(qp, t0).list[1].progress == 5)
+		check("задания: невыполненное не забрать", select(2, Quests.claim(qp, "feed", t0)) == "notDone")
+		local before = qp.coins
+		check("задания: награда выдаётся", Quests.claim(qp, "coins", t0) == 50 and qp.coins == before + 50)
+		check("задания: второй раз не выдаётся", select(2, Quests.claim(qp, "coins", t0)) == "claimed")
+		check("задания: неизвестный id отклоняется", select(2, Quests.claim(qp, "nope", t0)) == "unknown")
+		check("задания: бонус без трёх нельзя", select(2, Quests.claim(qp, "bonus", t0)) == "notDone")
+		Quests.add(qp, "feed", 10, t0)
+		Quests.add(qp, "pack", 1, t0)
+		check("задания: бонус готов при трёх", Quests.state(qp, t0).bonusReady == true)
+		local b2 = qp.coins
+		check("задания: бонус выдаётся один раз", Quests.claim(qp, "bonus", t0) == Quests.BONUS and qp.coins == b2 + Quests.BONUS and select(2, Quests.claim(qp, "bonus", t0)) == "claimed")
+		check("задания: на новый день всё обнуляется", Quests.state(qp, t0 + 86400).done == 0 and Quests.state(qp, t0 + 86400).bonusClaimed == false)
+		check("задания: секунды до обновления", Quests.state(qp, t0).secondsLeft > 0 and Quests.state(qp, t0).secondsLeft <= 86400)
+	end
 
 	table.insert(results, 1, string.format("Итого: %d проверок, провалено %d", #results, failed))
 	return table.concat(results, "\n")

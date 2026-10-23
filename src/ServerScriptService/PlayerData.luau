@@ -14,7 +14,7 @@ local Collection = require(game:GetService("ServerScriptService"):WaitForChild("
 -- ===== НАСТРОЙКИ =====
 -- Studio пишет в отдельное хранилище и никогда не трогает сохранения реальных игроков
 local STORE_NAME = if RunService:IsStudio() then "PlayerData_Studio_v1" else "PlayerData_v1"
-local CURRENT_VERSION = 6
+local CURRENT_VERSION = 7
 local START_COINS = 100 -- стартовые монеты нового игрока
 local AUTOSAVE_INTERVAL = 60 -- секунд между автосохранениями
 local LOCK_TIMEOUT = 150 -- блокировка старше этого считается «мёртвой» (сервер упал)
@@ -92,6 +92,7 @@ local function newProfile()
 		weekly = { week = 0, orders = 0 }, -- заказы музея за неделю (таблица лидеров)
 		setsEarned = {}, -- заработанные ступени наборов коллекции: [tankId][tierId] = true (см. Collection)
 		decor = {}, -- купленное наполнение аквариумов: { [key] = true } (см. Decor)
+		quests = { day = 0, prog = { coins = 0, feed = 0, pack = 0 }, claimed = {}, bonus = false }, -- ежедневные задания (см. Quests)
 	}
 end
 
@@ -123,6 +124,11 @@ local MIGRATIONS = {
 	-- v5 -> v6: каталог вырос с 25 до 50 видов. Ступени наборов, закрытые по прежним 25 видам, остаются заработанными.
 	[5] = function(data)
 		data.setsEarned = Collection.baselineEarned(data)
+		return data
+	end,
+	-- v6 -> v7: ежедневные задания.
+	[6] = function(data)
+		data.quests = { day = 0, prog = { coins = 0, feed = 0, pack = 0 }, claimed = {}, bonus = false }
 		return data
 	end,
 }

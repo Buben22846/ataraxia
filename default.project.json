@@ -127,6 +127,15 @@
         },
         "DecorState": {
           "$className": "RemoteEvent"
+        },
+        "QuestState": {
+          "$className": "RemoteEvent"
+        },
+        "QuestClaim": {
+          "$className": "RemoteEvent"
+        },
+        "FeedTap": {
+          "$className": "RemoteEvent"
         }
       }
     },
@@ -159,6 +168,9 @@
       },
       "Decor": {
         "$path": "src/ServerScriptService/Decor.luau"
+      },
+      "Quests": {
+        "$path": "src/ServerScriptService/Quests.luau"
       },
       "Bubbles": {
         "$path": "src/ServerScriptService/Bubbles.luau"

@@ -28,6 +28,7 @@ local Leaderboards = require(ServerScriptService:WaitForChild("Leaderboards"))
 local Bubbles = require(ServerScriptService:WaitForChild("Bubbles"))
 local Decor = require(ServerScriptService:WaitForChild("Decor"))
 local Drops = require(ServerScriptService:WaitForChild("Drops"))
+local Quests = require(ServerScriptService:WaitForChild("Quests"))
 
 -- ===== НАСТРОЙКИ =====
 -- Аквариумы игрока лежат в профиле (profile.tanks[id] = { slots, fish }), максимум мест и цены — в FishConfig.
@@ -66,8 +67,12 @@ local popBubbleEvent = remotes:WaitForChild("PopBubble")
 local buyDecorEvent = remotes:WaitForChild("BuyDecor")
 local fishDropEvent = remotes:WaitForChild("FishDrop")
 local collectDropEvent = remotes:WaitForChild("CollectDrop")
+local lastFeed = {} -- player -> os.clock последнего засчитанного кормления
 local dropState = {} -- player -> состояние монеток от особых рыб (Drops)
 local decorStateEvent = remotes:WaitForChild("DecorState")
+local questStateEvent = remotes:WaitForChild("QuestState")
+local questClaimEvent = remotes:WaitForChild("QuestClaim")
+local feedTapEvent = remotes:WaitForChild("FeedTap")
 local bubbleState = {} -- player -> состояние золотых пузырьков (Bubbles)
 
 -- Общая цель сервера во время Большого прилива (живёт только в памяти сервера)
@@ -333,6 +338,12 @@ local function sendSets(player, profile)
 	setsChangedEvent:FireClient(player, Collection.summary(profile))
 end
 
+-- Прогресс ежедневных заданий: прибавить и сразу показать клиенту
+local function questAdd(player, profile, kind, n)
+	Quests.add(profile, kind, n, os.time())
+	questStateEvent:FireClient(player, Quests.state(profile, os.time()))
+end
+
 local function pushState(player)
 	local profile = PlayerData.get(player)
 	if profile == nil then
@@ -343,6 +354,7 @@ local function pushState(player)
 	sendCollection(player, profile)
 	sendSets(player, profile)
 	decorStateEvent:FireClient(player, Decor.state(profile))
+	questStateEvent:FireClient(player, Quests.state(profile, os.time()))
 
 	dailyStateEvent:FireClient(player, DailyReward.state(profile, os.time()))
 	tutorialDoneEvent:FireClient(player, profile.tutorialDone)
@@ -400,6 +412,7 @@ local function onPlayerRemoving(player)
 	Badges.forget(player)
 	bubbleState[player] = nil
 	dropState[player] = nil
+	lastFeed[player] = nil
 	do
 		local leaving = PlayerData.get(player)
 		if leaving ~= nil then
@@ -520,6 +533,7 @@ openPackEvent.OnServerEvent:Connect(function(player, packId, count)
 	end
 
 	if opened > 0 then
+		questAdd(player, profile, "pack", opened)
 		if Tide.onPacks(tideState, player.UserId, opened, os.time(), #Players:GetPlayers()) then
 			task.defer(rewardTide)
 		end
@@ -1020,6 +1034,7 @@ popBubbleEvent.OnServerEvent:Connect(function(player, id)
 	local coins = Bubbles.reward(Economy.incomePerTick(profile, now) * incomeMultiplier(player))
 	profile.coins += coins
 	Telemetry.source(player, coins, profile.coins, Telemetry.TxType.Gameplay, "gold_bubble")
+	questAdd(player, profile, "coins", 1)
 	sendCoins(player, profile)
 	goldBubbleEvent:FireClient(player, { popped = id, coins = coins })
 end)
@@ -1043,8 +1058,43 @@ collectDropEvent.OnServerEvent:Connect(function(player, id)
 	end
 	profile.coins += coins
 	Telemetry.source(player, coins, profile.coins, Telemetry.TxType.Gameplay, "fish_drop")
+	questAdd(player, profile, "coins", 1)
 	sendCoins(player, profile)
 	fishDropEvent:FireClient(player, { claimed = id, coins = coins })
+end)
+
+-- ===== Кормление: клиент сообщает «бросил корм», сервер считает не чаще раза в полсекунды =====
+feedTapEvent.OnServerEvent:Connect(function(player)
+	local nowClock = os.clock()
+	if nowClock - (lastFeed[player] or -10) < 0.5 then
+		return
+	end
+	local profile = PlayerData.get(player)
+	if profile == nil then
+		return
+	end
+	lastFeed[player] = nowClock
+	questAdd(player, profile, "feed", 1)
+end)
+
+-- ===== Награда за задание: клиент присылает только id ("coins"/"feed"/"pack"/"bonus") =====
+questClaimEvent.OnServerEvent:Connect(function(player, id)
+	if not allow(player, "QuestClaim", 2, 3) then
+		return
+	end
+	if typeof(id) ~= "string" then
+		return
+	end
+	local profile = PlayerData.get(player)
+	if profile == nil then
+		return
+	end
+	local coins = Quests.claim(profile, id, os.time())
+	if coins ~= nil then
+		Telemetry.source(player, coins, profile.coins, Telemetry.TxType.Gameplay, "quest_" .. id)
+		sendCoins(player, profile)
+	end
+	questStateEvent:FireClient(player, Quests.state(profile, os.time()))
 end)
 
 -- ===== Таблицы лидеров =====
