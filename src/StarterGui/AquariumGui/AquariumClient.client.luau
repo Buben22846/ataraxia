@@ -36,26 +36,30 @@ local Strings = require(Shared:WaitForChild("Strings"))
 local T = Strings.t
 
 -- ===== ЗВУК =====
--- Только встроенные клиентские файлы rbxasset://sounds/... (загружать ничего не нужно).
+-- Часть звуков — встроенные файлы rbxasset://sounds/..., часть — бесплатные звуки Creator Store (rbxassetid://...).
 -- Громкость каждого звука не выше 0.4. Фоновая музыка — плейлист Playlist: треки играют по очереди
 -- (каждый раз в случайном порядке) с паузой между ними и громкостью AmbientVolume.
 -- Все треки из Creator Store (бесплатные для использования в играх Roblox, автор DistrokidOfficial).
 local Audio = {
 	Volume = 0.35, -- общая громкость эффектов (потолок 0.4)
 	Sounds = {
-		click = "rbxasset://sounds/clickfast.wav", -- нажатие кнопки
+		click = "rbxassetid://87437544236708", -- нажатие кнопки (мягкий «клик», Creator Store)
 		open = "rbxasset://sounds/impact_water.mp3", -- открытие пака
-		reveal = "rbxasset://sounds/electronicpingshort.wav", -- показ карточки рыбы
-		reward = "rbxasset://sounds/victory.wav", -- получение награды
+		reveal = "rbxassetid://71491555548135", -- показ карточки рыбы (gacha glow-up)
+		reward = "rbxassetid://96659579913194", -- получение награды (PathComplete)
+		coin = "rbxassetid://91478228840490", -- подобрана монетка
+		bubble = "rbxassetid://9112872239", -- лопнул золотой пузырёк
 		buy = "rbxasset://sounds/snap.mp3", -- покупка (пак, место, аквариум)
 	},
-	Gain = { click = 0.7, open = 0.6, reveal = 0.8, reward = 0.7, buy = 0.9 }, -- множитель от Volume
+	Gain = { click = 0.8, open = 0.6, reveal = 0.9, reward = 0.8, buy = 0.9, coin = 0.9, bubble = 0.9 }, -- множитель от Volume
 	Playlist = {
 		"rbxassetid://140662085604483", -- Aroma calm ritual
 		"rbxassetid://115907387271753", -- Winds of Stillness
 		"rbxassetid://103491917833365", -- Silent Moon Drift
 		"rbxassetid://88326647335364", -- Warm stones meditation
 		"rbxassetid://106345640140355", -- Soothing Cosmic Drift
+		"rbxassetid://1838792473", -- Dawn 2 (APM, Creator Store)
+		"rbxassetid://1845768989", -- Prelude (APM, пианино)
 	},
 	AmbientVolume = 0.2,
 	AmbientGap = 6, -- пауза между треками, секунд
@@ -4547,7 +4551,8 @@ do
 			if typeof(message.id) == "number" then
 				spawnGold(message.id, math.clamp(tonumber(message.life) or 15, 5, 30))
 			elseif message.coins ~= nil then
-				Sfx.play("reward")
+				Sfx.play("bubble")
+				Sfx.play("coin")
 				task.spawn(floatText, "+" .. Strings.num(message.coins))
 			end
 		end)
@@ -4678,7 +4683,7 @@ do
 						told = false,
 					}
 				elseif message.coins ~= nil then
-					Sfx.play("reward")
+					Sfx.play("coin")
 					local label = make("TextLabel", {
 						AnchorPoint = Vector2.new(0.5, 0.5),
 						Position = lastDropPos,
@@ -4969,7 +4974,7 @@ do
 		local entry = { label = label, fill = fill, action = action, id = id, ready = false }
 		action.Activated:Connect(function()
 			if entry.ready then
-				Sfx.play("buy")
+				Sfx.play("reward")
 				questClaimEvent:FireServer(id)
 			end
 		end)
