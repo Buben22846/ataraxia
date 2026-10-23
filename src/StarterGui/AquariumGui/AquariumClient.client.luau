@@ -327,7 +327,7 @@ local function iconButton(name, text, posX, caption)
 		Size = UDim2.fromScale(0.15, TOP_H),
 		BackgroundColor3 = COLOR_PANEL,
 		BorderSizePixel = 0,
-		Text = if caption ~= nil then (text .. "\n" .. caption) else text,
+		Text = caption or "",
 		TextScaled = true,
 		TextWrapped = true,
 		MinText = 9,
@@ -337,6 +337,7 @@ local function iconButton(name, text, posX, caption)
 		ZIndex = 3,
 	}, gui)
 	make("UICorner", { CornerRadius = UDim.new(0.25, 0) }, button)
+	UIKit.iconTop(button, text) -- text = id иконки
 	return button
 end
 
@@ -372,9 +373,10 @@ local fishCountLabel = make("TextLabel", {
 	ZIndex = 3,
 }, gui)
 make("UICorner", { CornerRadius = UDim.new(0.25, 0) }, fishCountLabel)
-UIKit.label(fishCountLabel)
+UIKit.label(fishCountLabel, 0.66)
+UIKit.icon(fishCountLabel, "ic_fish", 0.06)
 
-local giftButton = iconButton("DailyButton", "🎁", 0.5, T("btn_daily"))
+local giftButton = iconButton("DailyButton", "ic_gift", 0.5, T("btn_daily"))
 local giftDot = make("Frame", {
 	Name = "RedDot",
 	AnchorPoint = Vector2.new(0.5, 0.5),
@@ -390,7 +392,7 @@ make("UIStroke", { Color = WHITE, Thickness = 1.5 }, giftDot)
 
 giftButton.BackgroundColor3 = COLOR_GOLD
 giftButton.TextColor3 = Color3.fromRGB(74, 44, 0)
-local soundButton = iconButton("SoundButton", "🎧", 0.83, T("btn_sound"))
+local soundButton = iconButton("SoundButton", "ic_sound", 0.83, T("btn_sound"))
 soundButton.BackgroundColor3 = Color3.fromRGB(31, 100, 189) -- открывает настройки звука (см. блок «Настройки» ниже)
 
 -- ===== Монеты и покупка пака =====
@@ -406,6 +408,7 @@ make("UICorner", { CornerRadius = UDim.new(0.2, 0) }, buyButton)
 buyButton.TextColor3 = Color3.fromRGB(74, 44, 0)
 buyButton.BackgroundColor3 = COLOR_GOLD
 UIKit.hero(buyButton)
+UIKit.iconLeft(buyButton, "ic_shell")
 do
 	local skinned = buyButton:FindFirstChild("SkinText")
 	if skinned ~= nil then
@@ -456,8 +459,11 @@ local function makeSecondaryButton(name, text, posX, color)
 end
 
 local collectionButton = makeSecondaryButton("CollectionButton", "", 0.02, Color3.fromRGB(198, 63, 38)) -- коралловая: полоски
+UIKit.iconTop(collectionButton, "ic_collection")
 local oddsButton = makeSecondaryButton("OddsButton", T("odds"), 0.264, Color3.fromRGB(184, 50, 107)) -- розовая: «чешуя»
+UIKit.iconTop(oddsButton, "ic_odds")
 local expandButton = makeSecondaryButton("ExpandButton", "", 0.508, COLOR_BUTTON) -- бирюзовая: пузырьки
+UIKit.iconTop(expandButton, "ic_expand")
 
 local tankSlots = {} -- [tankId] = сколько рыб помещается (присылает сервер; нет записи = аквариум не открыт)
 local tankCounts = {} -- [tankId] = сколько рыб сейчас
@@ -465,7 +471,7 @@ local onTanksChanged = nil -- обновление окна выбора акв�
 
 local function refreshSlotsUi()
 	local slots = tankSlots[currentTank] or FishConfig.START_SLOTS
-	fishCountLabel.Text = "🐟 " .. tostring(tankCounts[currentTank] or 0) .. "/" .. tostring(slots)
+	fishCountLabel.Text = tostring(tankCounts[currentTank] or 0) .. "/" .. tostring(slots)
 	local nextPrice = FishConfig.slotPrice(currentTank, slots + 1)
 	if nextPrice == nil or slots >= FishConfig.MAX_SLOTS then
 		expandButton.Text = T("slots_max")
@@ -1539,6 +1545,7 @@ do
 		ZIndex = 3,
 	}, gui)
 	make("UICorner", { CornerRadius = UDim.new(0.25, 0) }, museumButton)
+	UIKit.iconLeft(museumButton, "ic_ticket")
 	local museumDot = make("Frame", {
 		Name = "RedDot",
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -2538,7 +2545,7 @@ do
 	shopPanel.title.Text = T("shop_title")
 	shopPanel.list.Size = UDim2.fromScale(0.9, 0.7)
 	ListKit.scroll(shopPanel)
-	local shopButton = iconButton("ShopButton", "🛒", 0.665, T("btn_shop"))
+	local shopButton = iconButton("ShopButton", "ic_shop", 0.665, T("btn_shop"))
 	shopButton.BackgroundColor3 = COLOR_BUTTON
 
 	-- Маленький значок «×2» у монет (на нижнем крае, чтобы не закрывать число)
@@ -3419,7 +3426,7 @@ do
 			Size = UDim2.fromScale(0.125, TOP_H),
 			BackgroundColor3 = COLOR_PANEL,
 			BorderSizePixel = 0,
-			Text = "👥\n" .. T("btn_guests"),
+			Text = T("btn_guests"),
 			TextScaled = true,
 			TextWrapped = true,
 			MinText = 9,
@@ -3429,6 +3436,7 @@ do
 			ZIndex = 3,
 		}, gui)
 		make("UICorner", { CornerRadius = UDim.new(0.25, 0) }, guestsButton)
+		UIKit.iconTop(guestsButton, "ic_guests")
 
 		-- ----- Список игроков -----
 		local playersPanel = makePanel("PlayersPanel")
@@ -4822,7 +4830,7 @@ local function buildAdminPanel()
 		adminCommandEvent:FireServer("reset")
 	end)
 
-	local openButton = iconButton("AdminButton", "⚙", 0.7, "Admin")
+	local openButton = iconButton("AdminButton", "ic_gear", 0.7, "Admin")
 	openButton.Activated:Connect(function()
 		panel.overlay.Visible = true
 	end)
@@ -4846,6 +4854,7 @@ do
 	local receivedAt = 0
 
 	local tasksButton = makeSecondaryButton("TasksButton", T("btn_quests"), 0.752, Color3.fromRGB(31, 100, 189)) -- синяя: линейка
+	UIKit.iconTop(tasksButton, "ic_tasks")
 	local badge = make("TextLabel", {
 		Name = "QuestBadge",
 		AnchorPoint = Vector2.new(0.5, 0.5),

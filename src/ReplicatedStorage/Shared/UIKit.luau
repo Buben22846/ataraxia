@@ -9,8 +9,8 @@ local SpriteData = require(script.Parent:WaitForChild("SpriteData"))
 
 local UIKit = {}
 
--- Пиксельный шрифт (есть в Roblox, поддерживает кириллицу). Если шрифт не загрузится, остаётся прежний.
-UIKit.PIXEL_FONT = Font.new("rbxasset://fonts/families/PressStart2P.json", Enum.FontWeight.Regular, Enum.FontStyle.Normal)
+-- Единый шрифт интерфейса: Ubuntu Bold (есть в Roblox, поддерживает кириллицу, круглые «дружелюбные» буквы). Если шрифт не загрузится, остаётся прежний.
+UIKit.PIXEL_FONT = Font.new("rbxasset://fonts/families/Ubuntu.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal)
 
 function UIKit.font(inst)
 	if inst:IsA("TextLabel") or inst:IsA("TextButton") or inst:IsA("TextBox") then
@@ -197,6 +197,8 @@ end)
 
 -- Кнопка или подпись: картинка-фон + копия текста поверх (дети всегда рисуются над текстом самого элемента).
 -- fixedLook — не выбирать вид по цвету фона (для подписей).
+local layouts = setmetatable({}, { __mode = "k" }) -- button -> { position } (где стоит копия текста; меняется иконкой)
+
 local function skinText(button, fixedLook)
 	if button:FindFirstChild("Skin") then
 		return true
@@ -211,6 +213,8 @@ local function skinText(button, fixedLook)
 		-- копия текста; textScale — доля ширины под текст (у билета края заняты корешками)
 		local textScale = look.textScale
 		local basePosition = if textScale then UDim2.fromScale(0.5, 0.5) else UDim2.new()
+		local layout = { position = basePosition }
+		layouts[button] = layout
 		local text = Instance.new("TextLabel")
 		text.Name = "SkinText"
 		text.BackgroundTransparency = 1
@@ -252,7 +256,7 @@ local function skinText(button, fixedLook)
 				patternLabel = setPattern(button, look.pattern, patternLabel)
 			end
 			local shift = if pressed and look.down ~= look.up then pixelScale() else 0
-			text.Position = basePosition + UDim2.fromOffset(0, shift)
+			text.Position = layout.position + UDim2.fromOffset(0, shift)
 		end
 		button:GetPropertyChangedSignal("Text"):Connect(function()
 			text.Text = button.Text
@@ -287,6 +291,54 @@ end
 
 function UIKit.button(button)
 	return skinText(button, nil)
+end
+
+-- Иконка в кнопке: сверху, подпись под ней (как нижняя панель) или слева от подписи.
+local function addIcon(button, id, mode)
+	local layout, text = layouts[button], button:FindFirstChild("SkinText")
+	if layout == nil or text == nil then
+		return false
+	end
+	local icon = Instance.new("ImageLabel")
+	icon.Name = "Icon_" .. id
+	icon.BackgroundTransparency = 1
+	icon.Active = false
+	icon.SizeConstraint = Enum.SizeConstraint.RelativeYY
+	icon.ZIndex = button.ZIndex + 3
+	if mode == "top" then
+		icon.AnchorPoint = Vector2.new(0.5, 0)
+		icon.Position = UDim2.fromScale(0.5, 0.06)
+		icon.Size = UDim2.fromScale(0.52, 0.52)
+		layout.position = UDim2.fromScale(0, 0.58)
+		text.Size = UDim2.fromScale(1, 0.38)
+	else
+		icon.AnchorPoint = Vector2.new(0, 0.5)
+		icon.Position = UDim2.fromScale(0.05, 0.5)
+		icon.Size = UDim2.fromScale(0.62, 0.62)
+		layout.position = UDim2.fromScale(0.3, 0)
+		text.Size = UDim2.fromScale(0.66, 1)
+	end
+	text.Position = layout.position
+	if not Sprites.apply(icon, id, false) then
+		icon:Destroy()
+		layout.position = UDim2.new()
+		text.Position = UDim2.new()
+		text.Size = UDim2.fromScale(1, 1)
+		return false
+	end
+	icon.Parent = button
+	button:GetPropertyChangedSignal("ZIndex"):Connect(function()
+		icon.ZIndex = button.ZIndex + 3
+	end)
+	return true
+end
+
+function UIKit.iconTop(button, id)
+	return addIcon(button, id, "top")
+end
+
+function UIKit.iconLeft(button, id)
+	return addIcon(button, id, "left")
 end
 
 -- Главная кнопка: крупная золотая «жемчужина» с искрами
