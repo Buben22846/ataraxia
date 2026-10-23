@@ -4869,7 +4869,7 @@ do
 	local strip = make("TextButton", {
 		Name = "QuestStrip",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.fromScale(0.5, 0.205), -- под полосой ивента, над водой
+		Position = UDim2.fromScale(0.5, 0.222), -- под полосой ивента, над водой
 		Size = UDim2.fromScale(0.7, 0.05),
 		BackgroundColor3 = Color3.fromRGB(31, 100, 189),
 		BorderSizePixel = 0,
