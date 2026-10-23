@@ -307,7 +307,7 @@ local discovered = {} -- id вида -> true (собранные виды, пр�
 -- Подсказки (ожидание монет, полная офлайн-копилка): реальный код задаёт блок магазина ниже, пока это заглушки.
 -- noCoins() возвращает true, если сам показал подсказку и обычное сообщение не нужно.
 local CurrentUi = { state = nil, receivedAt = 0 } -- течения и мутации от сервера (см. блок «Течения» ниже)
-local Hints = { noCoins = function() return false end, offline = function(gained, capped) end, heart = function(label) end, eat = function(fish, feeding) end }
+local Hints = { noCoins = function() return false end, offline = function(gained, capped) end, heart = function(label) end, eat = function(fish, feeding) end, sparkle = function(label, sprite, variant, alive) end }
 local LeaderboardUi = { open = function() end } -- окно таблиц лидеров (настоящую функцию задаёт блок ниже)
 local DecorUi = { show = function(tankId) end, build = function(parent, tankId, z, owned) return function() end end, refresh = function() end, ask = function(key) end, data = { owned = {}, bonus = {} } } -- data: купленное наполнение от сервера (owned[key] = true, bonus[tankId] = прибавка к доходу) -- декор (блок ниже)
 local setsState = {} -- наборы коллекции от сервера: { [tankId] = { bonus, tiers = { {have, need, done, bonus}, ... } } }
@@ -1838,20 +1838,11 @@ local function addFish(fishData)
 		spriteLabel:Destroy()
 	end
 
-	-- Особые варианты обводятся цветным кольцом (радужная переливается)
+	-- Особые варианты искрятся блёстками (золотая — золотыми, радужная переливается) и иногда дают монетку
 	if fishData.variant ~= nil and fishData.variant ~= "normal" then
-		local variant = FishConfig.variantOf(fishData.variant)
-		local ring = make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ZIndex = FISH_ZINDEX }, label)
-		make("UICorner", { CornerRadius = UDim.new(0.5, 0) }, ring)
-		local stroke = make("UIStroke", { Color = variant.color, Thickness = 3 }, ring)
-		if fishData.variant == "rainbow" then
-			task.spawn(function()
-				while fish.alive do
-					stroke.Color = Color3.fromHSV((os.clock() * 0.3) % 1, 0.6, 1)
-					task.wait(0.1)
-				end
-			end)
-		end
+		pcall(Hints.sparkle, label, fish.sprite, fishData.variant, function()
+			return fish.alive
+		end)
 	end
 
 	label.Activated:Connect(function()
@@ -3671,18 +3662,9 @@ do
 				sprite = nil
 			end
 			if data.variant ~= nil and data.variant ~= "normal" then
-				local variant = FishConfig.variantOf(data.variant)
-				local ring = make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ZIndex = 8 }, label)
-				make("UICorner", { CornerRadius = UDim.new(0.5, 0) }, ring)
-				local stroke = make("UIStroke", { Color = variant.color, Thickness = 3 }, ring)
-				if data.variant == "rainbow" then
-					task.spawn(function()
-						while visit.token == token and label.Parent ~= nil do
-							stroke.Color = Color3.fromHSV((os.clock() * 0.3) % 1, 0.6, 1)
-							task.wait(0.1)
-						end
-					end)
-				end
+				pcall(Hints.sparkle, label, sprite, data.variant, function()
+					return visit.token == token and label.Parent ~= nil
+				end)
 			end
 			table.insert(visit.fish, label)
 			task.spawn(swimLoop, label, sprite, data.species, token)
@@ -4553,6 +4535,183 @@ do
 				task.spawn(floatText, "+" .. Strings.num(message.coins))
 			end
 		end)
+	end
+
+	-- ----- Блёстки особых рыб и монетки-награды -----
+	-- Золотая рыба искрится золотыми звёздочками, радужная переливается всеми цветами. Вместо жёлтого кольца.
+	do
+		local GOLD_STAR = Color3.fromRGB(255, 226, 110)
+		Hints.sparkle = function(label, sprite, variant, alive)
+			if label:GetAttribute("Sparkle") then
+				return
+			end
+			label:SetAttribute("Sparkle", true)
+			local rainbow = variant == "rainbow"
+			task.spawn(function()
+				task.wait(rng:NextNumber() * 0.8)
+				local nextStar = 0
+				while alive() and label.Parent ~= nil do
+					local hue = (os.clock() * 0.3) % 1
+					-- мягкая подсветка самой рыбы
+					if sprite ~= nil and sprite.Parent ~= nil then
+						sprite.ImageColor3 = if rainbow then Color3.fromHSV(hue, 0.28, 1) else Color3.fromRGB(255, 244, 205)
+					end
+					if label.Visible and os.clock() >= nextStar then
+						nextStar = os.clock() + 0.35 + rng:NextNumber() * 0.5
+						local big = rng:NextNumber() < 0.4
+						local star = Instance.new("ImageLabel")
+						star.Name = "Sparkle"
+						star.AnchorPoint = Vector2.new(0.5, 0.5)
+						star.Position = UDim2.fromScale(0.1 + rng:NextNumber() * 0.8, 0.1 + rng:NextNumber() * 0.8)
+						star.Size = UDim2.fromScale(0, 0)
+						star.BackgroundTransparency = 1
+						star.Active = false
+						star.ZIndex = label.ZIndex + 2
+						star.ImageColor3 = if rainbow then Color3.fromHSV((hue + rng:NextNumber() * 0.5) % 1, 0.55, 1) else GOLD_STAR
+						if Sprites.apply(star, if big then "fx_star" else "fx_star_small", false) then
+							star.Parent = label
+							local size = if big then 0.34 else 0.22
+							local grow = TweenService:Create(star, TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Size = UDim2.fromScale(size, size) })
+							grow:Play()
+							grow.Completed:Once(function()
+								local fade = TweenService:Create(star, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Size = UDim2.fromScale(0, 0), ImageTransparency = 1, Rotation = 90 })
+								fade:Play()
+								fade.Completed:Once(function()
+									star:Destroy()
+								end)
+							end)
+						else
+							star:Destroy()
+						end
+					end
+					task.wait(0.1)
+				end
+			end)
+		end
+		-- рыбы, которые появились раньше этого блока
+		for _, fish in pairs(fishById) do
+			local variant = fish.data.variant
+			if variant ~= nil and variant ~= "normal" then
+				pcall(Hints.sparkle, fish.label, fish.sprite, variant, function()
+					return fish.alive
+				end)
+			end
+		end
+
+		local dropEvent = remotes:WaitForChild("FishDrop", 10)
+		local collectEvent = remotes:WaitForChild("CollectDrop", 10)
+		if dropEvent ~= nil and collectEvent ~= nil then
+			local pending = nil -- { id, fishId, tank, expires, coin }
+			local function clearPending()
+				if pending ~= nil and pending.coin ~= nil then
+					pending.coin:Destroy()
+				end
+				pending = nil
+			end
+
+			-- Монетка над рыбой: качается и подпрыгивает, пока не нажмут
+			local function showCoin(fish)
+				local coin = Instance.new("ImageButton")
+				coin.Name = "DropCoin"
+				coin.AnchorPoint = Vector2.new(0.5, 1)
+				coin.Position = UDim2.fromScale(0.5, 0.12)
+				coin.Size = UDim2.fromScale(0.8, 0.8)
+				coin.BackgroundTransparency = 1
+				coin.AutoButtonColor = false
+				coin.ZIndex = fish.label.ZIndex + 4
+				if not Sprites.apply(coin, "fx_coin", false) then
+					coin:Destroy()
+					return nil
+				end
+				coin.Parent = fish.label
+				TweenService:Create(coin, TweenInfo.new(0.55, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Position = UDim2.fromScale(0.5, -0.04) }):Play()
+				local pulse = Instance.new("UIScale")
+				pulse.Parent = coin
+				TweenService:Create(pulse, TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.15 }):Play()
+				local taken = false
+				coin.Activated:Connect(function()
+					if taken or pending == nil then
+						return
+					end
+					taken = true
+					local id = pending.id
+					local at = fish.label.Position
+					collectEvent:FireServer(id)
+					playPop(1.3)
+					puff(tank, at.X.Scale, at.Y.Scale - 0.04, 6, Color3.fromRGB(255, 226, 110))
+					clearPending()
+				end)
+				puff(tank, fish.label.Position.X.Scale, fish.label.Position.Y.Scale - 0.04, 5, Color3.fromRGB(255, 226, 110))
+				playPop(1.7)
+				return coin
+			end
+
+			local lastDropPos = UDim2.fromScale(0.5, 0.5)
+			dropEvent.OnClientEvent:Connect(function(message)
+				if typeof(message) ~= "table" then
+					return
+				end
+				if typeof(message.id) == "number" and typeof(message.fishId) == "number" then
+					clearPending()
+					pending = {
+						id = message.id,
+						fishId = message.fishId,
+						tank = message.tank,
+						expires = os.clock() + math.clamp(tonumber(message.life) or 25, 5, 40),
+						coin = nil,
+						told = false,
+					}
+				elseif message.coins ~= nil then
+					Sfx.play("reward")
+					local label = make("TextLabel", {
+						AnchorPoint = Vector2.new(0.5, 0.5),
+						Position = lastDropPos,
+						Size = UDim2.fromScale(0.4, 0.05),
+						BackgroundTransparency = 1,
+						Text = "+" .. Strings.num(message.coins),
+						TextScaled = true,
+						MinText = 12,
+						MaxText = 30,
+						TextColor3 = Color3.fromRGB(255, 202, 40),
+						TextStrokeTransparency = 0.3,
+						Font = FONT,
+						ZIndex = 4,
+					}, tank)
+					local tween = TweenService:Create(label, TweenInfo.new(1.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+						Position = lastDropPos - UDim2.fromScale(0, 0.1),
+						TextTransparency = 1,
+						TextStrokeTransparency = 1,
+					})
+					tween:Play()
+					tween.Completed:Once(function()
+						label:Destroy()
+					end)
+				end
+			end)
+
+			-- монетка появляется, когда рыба на экране; если рыба в другом аквариуме — подсказываем, где она
+			task.spawn(function()
+				while true do
+					task.wait(0.4)
+					if pending ~= nil then
+						if os.clock() > pending.expires then
+							clearPending()
+						else
+							local fish = fishById[pending.fishId]
+							if fish ~= nil and fish.alive and fish.label.Visible then
+								if pending.coin == nil or pending.coin.Parent == nil then
+									pending.coin = showCoin(fish)
+								end
+								lastDropPos = fish.label.Position
+							elseif not pending.told then
+								pending.told = true
+								showToast(T("drop_elsewhere", Strings.tank(pending.tank)), COLOR_BUTTON, 3)
+							end
+						end
+					end
+				end
+			end)
+		end
 	end
 end
 

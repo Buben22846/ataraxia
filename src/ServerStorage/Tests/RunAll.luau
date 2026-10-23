@@ -917,6 +917,36 @@ return function()
 		check("выпадение: вулканических рыб в паке лагуны нет", reachable.ember_lionfish == nil and reachable.basalt_limpet == nil)
 	end
 
+	-- ===== Монетки от золотых и радужных рыб =====
+	do
+		local Drops = require(ServerScriptService.Drops)
+		local PlayerData = require(ServerScriptService.PlayerData)
+		local T0 = 1_800_000_000
+		local rng = Random.new(5)
+		local dp = PlayerData._newProfile()
+		local st = Drops.newState(T0, rng)
+		check("монетки: без особых рыб ничего не выпадает", Drops.tick(st, dp, st.nextAt, 1, rng) == nil)
+		dp.tanks.lagoon.fish = {
+			{ id = 1, species = "guppy", variant = "normal", born = T0 - 1000, earned = 0 },
+			{ id = 2, species = "puffer", variant = "golden", born = T0 - 100000, earned = 0 },
+		}
+		st.nextAt = T0
+		local drop = Drops.tick(st, dp, T0, 1, rng)
+		check("монетка: выпадает только от особой рыбы", drop ~= nil and drop.fishId == 2 and drop.tank == "lagoon" and drop.life == FishConfig.Drops.LIFE)
+		check("монетка: следующая не раньше паузы", Drops.tick(st, dp, T0 + 1, 1, rng) == nil)
+		check("монетка: чужой id не принимается", Drops.claim(st, drop.id + 1, T0 + 2) == nil)
+		local amount = Drops.claim(st, drop.id, T0 + 3)
+		local per = FishConfig.incomeOf("puffer", "golden", 100000, nil)
+		check("монетка: награда = тики дохода рыбы (с минимумом)", amount == math.max(FishConfig.Drops.MIN, per * FishConfig.Drops.golden.ticks))
+		check("монетка: повторно не подобрать", Drops.claim(st, drop.id, T0 + 4) == nil)
+		st.nextAt = T0
+		local drop2 = Drops.tick(st, dp, T0 + 5, 2, rng)
+		check("монетка: просроченная не принимается", drop2 ~= nil and Drops.claim(st, drop2.id, T0 + 5 + FishConfig.Drops.LIFE + 3) == nil)
+		st.nextAt = T0
+		local drop3 = Drops.tick(st, dp, T0 + 100, 2, rng)
+		check("монетка: бонус игрока увеличивает награду", drop3 ~= nil and Drops.claim(st, drop3.id, T0 + 101) == math.max(FishConfig.Drops.MIN, math.floor(FishConfig.incomeOf("puffer", "golden", 100100, nil) * FishConfig.Drops.golden.ticks * 2)))
+	end
+
 	-- ===== Конфиг =====
 	for packId, pack in pairs(FishConfig.Packs) do
 		local sum = 0

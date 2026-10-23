@@ -116,6 +116,12 @@
         "PopBubble": {
           "$className": "RemoteEvent"
         },
+        "FishDrop": {
+          "$className": "RemoteEvent"
+        },
+        "CollectDrop": {
+          "$className": "RemoteEvent"
+        },
         "BuyDecor": {
           "$className": "RemoteEvent"
         },
@@ -147,6 +153,9 @@
       },
       "Events": {
         "$path": "src/ServerScriptService/Events.luau"
+      },
+      "Drops": {
+        "$path": "src/ServerScriptService/Drops.luau"
       },
       "Decor": {
         "$path": "src/ServerScriptService/Decor.luau"

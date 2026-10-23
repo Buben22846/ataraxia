@@ -27,6 +27,7 @@ local Tide = require(ServerScriptService:WaitForChild("Tide"))
 local Leaderboards = require(ServerScriptService:WaitForChild("Leaderboards"))
 local Bubbles = require(ServerScriptService:WaitForChild("Bubbles"))
 local Decor = require(ServerScriptService:WaitForChild("Decor"))
+local Drops = require(ServerScriptService:WaitForChild("Drops"))
 
 -- ===== НАСТРОЙКИ =====
 -- Аквариумы игрока лежат в профиле (profile.tanks[id] = { slots, fish }), максимум мест и цены — в FishConfig.
@@ -63,6 +64,9 @@ local leaderboardStateEvent = remotes:WaitForChild("LeaderboardState")
 local goldBubbleEvent = remotes:WaitForChild("GoldBubble")
 local popBubbleEvent = remotes:WaitForChild("PopBubble")
 local buyDecorEvent = remotes:WaitForChild("BuyDecor")
+local fishDropEvent = remotes:WaitForChild("FishDrop")
+local collectDropEvent = remotes:WaitForChild("CollectDrop")
+local dropState = {} -- player -> состояние монеток от особых рыб (Drops)
 local decorStateEvent = remotes:WaitForChild("DecorState")
 local bubbleState = {} -- player -> состояние золотых пузырьков (Bubbles)
 
@@ -395,6 +399,7 @@ local function onPlayerRemoving(player)
 	passOwned[player] = nil
 	Badges.forget(player)
 	bubbleState[player] = nil
+	dropState[player] = nil
 	do
 		local leaving = PlayerData.get(player)
 		if leaving ~= nil then
@@ -1019,6 +1024,29 @@ popBubbleEvent.OnServerEvent:Connect(function(player, id)
 	goldBubbleEvent:FireClient(player, { popped = id, coins = coins })
 end)
 
+-- ===== Монетка от особой рыбы: клиент присылает id, сумму считал сервер при выпуске =====
+collectDropEvent.OnServerEvent:Connect(function(player, id)
+	if not allow(player, "CollectDrop", 2, 3) then
+		return
+	end
+	if typeof(id) ~= "number" or id ~= id then
+		return
+	end
+	local profile = PlayerData.get(player)
+	local state = dropState[player]
+	if profile == nil or state == nil then
+		return
+	end
+	local coins = Drops.claim(state, id, os.time())
+	if coins == nil then
+		return
+	end
+	profile.coins += coins
+	Telemetry.source(player, coins, profile.coins, Telemetry.TxType.Gameplay, "fish_drop")
+	sendCoins(player, profile)
+	fishDropEvent:FireClient(player, { claimed = id, coins = coins })
+end)
+
 -- ===== Таблицы лидеров =====
 -- Клиент просит таблицу по имени; топ читается из кеша (Leaderboards сам обновляет его не чаще READ_EVERY).
 leaderboardActionEvent.OnServerEvent:Connect(function(player, board)
@@ -1142,6 +1170,16 @@ task.spawn(function()
 					local bubbleId, life = Bubbles.tick(bubbles, now)
 					if bubbleId ~= nil then
 						goldBubbleEvent:FireClient(player, { id = bubbleId, life = life })
+					end
+					-- монетка от золотой или радужной рыбки
+					local drops = dropState[player]
+					if drops == nil then
+						drops = Drops.newState(now)
+						dropState[player] = drops
+					end
+					local drop = Drops.tick(drops, profile, now, incomeMultiplier(player))
+					if drop ~= nil then
+						fishDropEvent:FireClient(player, drop)
 					end
 				end
 			end
