@@ -350,6 +350,13 @@ make("UITextSizeConstraint", { MinTextSize = 8, MaxTextSize = 28 }, coinsLabel)
 make("UICorner", { CornerRadius = UDim.new(0.25, 0) }, coinsLabel)
 UIKit.label(coinsLabel, 0.72) -- справа от иконки монеты
 UIKit.icon(coinsLabel, "ui_coin", 0.05)
+do
+	-- у копии текста автомасштаб включаем явно (иначе цифры остаются мелкими, размер 8)
+	local skinned = coinsLabel:FindFirstChild("SkinText")
+	if skinned ~= nil then
+		skinned.TextScaled = true
+	end
+end
 
 local fishCountLabel = make("TextLabel", {
 	Name = "FishCountLabel",
@@ -395,6 +402,12 @@ make("UICorner", { CornerRadius = UDim.new(0.2, 0) }, buyButton)
 -- Создана в Studio, а не через make(), поэтому скин вешаем вручную.
 buyButton.TextColor3 = Color3.fromRGB(255, 241, 193)
 UIKit.ticket(buyButton)
+do
+	local skinned = buyButton:FindFirstChild("SkinText")
+	if skinned ~= nil then
+		skinned.TextScaled = true
+	end
+end
 UIKit.pulse(buyButton)
 
 local function refreshBuyButton()
