@@ -308,9 +308,9 @@ local function addIcon(button, id, mode)
 	if mode == "top" then
 		icon.AnchorPoint = Vector2.new(0.5, 0)
 		icon.Position = UDim2.fromScale(0.5, 0.06)
-		icon.Size = UDim2.fromScale(0.52, 0.52)
-		layout.position = UDim2.fromScale(0, 0.58)
-		text.Size = UDim2.fromScale(1, 0.38)
+		icon.Size = UDim2.fromScale(0.58, 0.58)
+		layout.position = UDim2.fromScale(0, 0.62)
+		text.Size = UDim2.fromScale(1, 0.36)
 	else
 		icon.AnchorPoint = Vector2.new(0, 0.5)
 		icon.Position = UDim2.fromScale(0.05, 0.5)

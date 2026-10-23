@@ -2073,7 +2073,7 @@ addHint(tanksPanel, T("tanks_hint"))
 
 local function refreshTankButton()
 	local def = FishConfig.Tanks[currentTank]
-	tankButton.Text = def.emoji .. " " .. Strings.tank(currentTank) .. " ▾"
+	tankButton.Text = def.emoji .. " " .. Strings.tank(currentTank)
 end
 
 -- Переключение аквариума: цвет воды, видимые рыбы, кнопки, коллекция
