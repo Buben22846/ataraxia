@@ -4570,7 +4570,7 @@ do
 						star.ImageColor3 = if rainbow then Color3.fromHSV((hue + rng:NextNumber() * 0.5) % 1, 0.55, 1) else GOLD_STAR
 						if Sprites.apply(star, if big then "fx_star" else "fx_star_small", false) then
 							star.Parent = label
-							local size = if big then 0.34 else 0.22
+							local size = if big then 0.55 else 0.34
 							local grow = TweenService:Create(star, TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Size = UDim2.fromScale(size, size) })
 							grow:Play()
 							grow.Completed:Once(function()
